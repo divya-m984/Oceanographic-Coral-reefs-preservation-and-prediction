@@ -454,13 +454,24 @@ class TestCLI:
         assert missing_cols == [], f"Missing columns in saved CSV: {missing_cols}"
 
     @pytest.mark.integration
-    def test_default_output_path_exists_after_generation(self, cfg):
-        """Running the generator with default args should create data/raw/observations.csv."""
-        from src.data.generate_data import generate_observations
+    def test_default_output_path_exists_after_generation(self, tmp_path, monkeypatch):
+        """The CLI must create a non-empty CSV at the requested output path.
 
-        df = generate_observations(n_samples=100, seed=42, cfg=cfg)
-        out = cfg.raw_data_path
-        out.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(out, index=False)
-        assert out.exists()
-        assert out.stat().st_size > 0
+        Uses tmp_path so no real project file is touched during testing.
+        """
+        import sys
+
+        output = tmp_path / "observations.csv"
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["generate_data", "--samples", "100", "--seed", "42", "--output", str(output)],
+        )
+        from src.config import reset_config
+        from src.data.generate_data import main
+
+        reset_config()
+        result = main()
+        assert result == 0
+        assert output.exists()
+        assert output.stat().st_size > 0

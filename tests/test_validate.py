@@ -29,7 +29,6 @@ import pytest
 from src.config import get_config, reset_config
 from src.data.generate_data import generate_observations
 from src.data.validate import (
-    CoralObservationSchema,
     validate_dataframe,
 )
 
@@ -351,9 +350,7 @@ class TestMissingValues:
             "region",
         ],
     )
-    def test_nan_in_non_nullable_field_fails(
-        self, valid_df: pd.DataFrame, col: str
-    ) -> None:
+    def test_nan_in_non_nullable_field_fails(self, valid_df: pd.DataFrame, col: str) -> None:
         df = _clone(valid_df).astype(object)  # cast to object to allow mixed NaN
         df.loc[0, col] = None
         is_valid, failures = validate_dataframe(df, lazy=True)
@@ -376,7 +373,7 @@ class TestInvalidCoordinates:
         if not mask.any():
             pytest.skip("No Lakshadweep rows in fixture")
         idx = df[mask].index[0]
-        df.loc[idx, "latitude"] = 9.0    # Gulf of Mannar range, outside Lakshadweep [10,12.5]
+        df.loc[idx, "latitude"] = 9.0  # Gulf of Mannar range, outside Lakshadweep [10,12.5]
         df.loc[idx, "longitude"] = 79.0  # Gulf of Mannar range, outside Lakshadweep [72,74]
         is_valid, failures = validate_dataframe(df, lazy=True)
         assert not is_valid
@@ -388,7 +385,7 @@ class TestInvalidCoordinates:
         if not mask.any():
             pytest.skip("No Gulf of Kutch rows in fixture")
         idx = df[mask].index[0]
-        df.loc[idx, "latitude"] = 5.0    # far south, below 22.0 minimum
+        df.loc[idx, "latitude"] = 5.0  # far south, below 22.0 minimum
         df.loc[idx, "longitude"] = 80.0  # east of 71.0 maximum
         is_valid, failures = validate_dataframe(df, lazy=True)
         assert not is_valid
@@ -401,7 +398,7 @@ class TestInvalidCoordinates:
             pytest.skip("No Lakshadweep rows in fixture")
         idx = df[mask].index[0]
         # Set coordinates exactly on the Lakshadweep boundary
-        df.loc[idx, "latitude"] = 10.0   # lat_min exactly
+        df.loc[idx, "latitude"] = 10.0  # lat_min exactly
         df.loc[idx, "longitude"] = 72.0  # lon_min exactly
         is_valid, failures = validate_dataframe(df, lazy=True)
         assert is_valid, f"Boundary coordinates should pass; failures:\n{failures}"
@@ -432,9 +429,9 @@ class TestMultipleFailures:
 
     def test_multiple_failures_reported(self, valid_df: pd.DataFrame) -> None:
         df = _clone(valid_df)
-        df.loc[0, "ph"] = -1.0              # out of range
+        df.loc[0, "ph"] = -1.0  # out of range
         df.loc[1, "reef_health"] = "zombie"  # invalid class
-        df.loc[2, "region"] = "Mars"         # invalid region
+        df.loc[2, "region"] = "Mars"  # invalid region
         is_valid, failures = validate_dataframe(df, lazy=True)
         assert not is_valid
         assert failures is not None
@@ -477,8 +474,10 @@ class TestCLI:
             pytest.skip("data/raw/observations.csv not present")
         out_file = tmp_path / "validated.csv"
         result = self._run_cli(
-            "--input", str(self._RAW_CSV),
-            "--output", str(out_file),
+            "--input",
+            str(self._RAW_CSV),
+            "--output",
+            str(out_file),
         )
         assert result.returncode == 0
         assert out_file.exists(), "Validated output file was not created"
@@ -510,8 +509,10 @@ class TestCLI:
         df.loc[0, "ph"] = -1.0
         df.to_csv(bad_csv, index=False)
         result = self._run_cli(
-            "--input", str(bad_csv),
-            "--output", str(out_file),
+            "--input",
+            str(bad_csv),
+            "--output",
+            str(out_file),
         )
         assert result.returncode == 1
         assert not out_file.exists(), "Output file must not be written on validation failure"

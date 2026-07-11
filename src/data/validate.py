@@ -73,10 +73,10 @@ _VALID_RESTORATION_CLASSES: list[str] = [
 # Duplicated here so the schema is self-contained and does not require the
 # Config at import time.  Values must stay in sync with params.yaml.
 _REGION_BOUNDS: dict[str, list[float]] = {
-    "Lakshadweep":                  [10.0, 12.5, 72.0, 74.0],
-    "Gulf of Mannar":               [8.5,  10.5, 78.0, 80.5],
-    "Gulf of Kutch":                [22.0, 24.5, 68.0, 71.0],
-    "Andaman and Nicobar Islands":  [6.5,  14.0, 92.0, 94.0],
+    "Lakshadweep": [10.0, 12.5, 72.0, 74.0],
+    "Gulf of Mannar": [8.5, 10.5, 78.0, 80.5],
+    "Gulf of Kutch": [22.0, 24.5, 68.0, 71.0],
+    "Andaman and Nicobar Islands": [6.5, 14.0, 92.0, 94.0],
 }
 
 
@@ -282,10 +282,7 @@ class CoralObservationSchema(DataFrameModel):
             if region not in _REGION_BOUNDS:
                 return True  # already caught by region field check
             lat_min, lat_max, lon_min, lon_max = _REGION_BOUNDS[region]
-            return (
-                lat_min <= row["latitude"] <= lat_max
-                and lon_min <= row["longitude"] <= lon_max
-            )
+            return lat_min <= row["latitude"] <= lat_max and lon_min <= row["longitude"] <= lon_max
 
         return df.apply(_row_in_bounds, axis=1)
 
@@ -344,11 +341,11 @@ def _format_failure_report(failures: pd.DataFrame, max_rows: int = 30) -> str:
     n = len(failures)
     shown = failures.head(max_rows)
     for _, row in shown.iterrows():
-        col   = row.get("column", "?")
+        col = row.get("column", "?")
         check = row.get("check", "?")
-        val   = row.get("failure_case", "?")
-        idx   = row.get("index", "?")
-        ctx   = row.get("schema_context", "")
+        val = row.get("failure_case", "?")
+        idx = row.get("index", "?")
+        ctx = row.get("schema_context", "")
         lines.append(f"  [{ctx}] column={col!r}  check={check!r}  value={val!r}  row={idx}")
     if n > max_rows:
         lines.append(f"  ... and {n - max_rows} more failure(s) not shown.")
@@ -481,9 +478,7 @@ def main() -> int:
     else:
         assert failures is not None
         print_failure_report(failures, input_path)
-        logger.error(
-            "Validation FAILED with %d failure(s). No output file written.", len(failures)
-        )
+        logger.error("Validation FAILED with %d failure(s). No output file written.", len(failures))
         return 1
 
 
