@@ -7,7 +7,7 @@ base:
   version: "0.1.0"
 
 data:
-  n_samples: 12000
+  n_samples: 15000
   raw_filename: "observations.csv"
   regions:
     - "Lakshadweep"
