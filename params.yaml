@@ -1,0 +1,119 @@
+# params.yaml — single source of truth for all tunable knobs.
+# Every value here is consumed by src/config.py and referenced in dvc.yaml.
+
+base:
+  random_seed: 42
+  project_name: "CoralSense"
+  version: "0.1.0"
+
+data:
+  n_samples: 12000
+  raw_filename: "observations.csv"
+  regions:
+    - "Lakshadweep"
+    - "Gulf of Mannar"
+    - "Gulf of Kutch"
+    - "Andaman and Nicobar Islands"
+  # Approximate bounding boxes [lat_min, lat_max, lon_min, lon_max]
+  region_bounds:
+    Lakshadweep:         [10.0, 12.5,  72.0,  74.0]
+    "Gulf of Mannar":    [ 8.5, 10.5,  78.0,  80.5]
+    "Gulf of Kutch":     [22.0, 24.5,  68.0,  71.0]
+    "Andaman and Nicobar Islands": [6.5, 14.0, 92.0, 94.0]
+  noise_scale: 0.15      # fractional Gaussian noise added to labels
+
+split:
+  test_size: 0.20
+  val_size: 0.10          # fraction of training set used for validation
+  stratify: true
+
+features:
+  numeric:
+    - depth_m
+    - water_temperature_c
+    - ph
+    - salinity_ppt
+    - dissolved_oxygen_mg_l
+    - turbidity_ntu
+    - light_intensity
+    - current_speed_m_s
+    - sonar_backscatter
+    - rugosity_index
+    - hard_substrate_percentage
+    - acoustic_complexity_index
+    - coral_cover_percentage
+    - bleaching_percentage
+    - disease_percentage
+  categorical:
+    - region
+  target_health: "reef_health"
+  target_restoration: "restoration_suitability"
+  health_classes:
+    - healthy
+    - stressed
+    - bleached
+    - severely_degraded
+  restoration_classes:
+    - suitable
+    - moderately_suitable
+    - unsuitable
+
+models:
+  cv_folds: 5
+  health:
+    logistic_regression:
+      C: 1.0
+      max_iter: 1000
+      class_weight: balanced
+    random_forest:
+      n_estimators: 200
+      max_depth: 12
+      min_samples_leaf: 4
+      class_weight: balanced
+    xgboost:
+      n_estimators: 300
+      max_depth: 6
+      learning_rate: 0.05
+      subsample: 0.8
+      colsample_bytree: 0.8
+    hist_gradient_boosting:          # fallback if XGBoost unavailable
+      max_iter: 300
+      max_depth: 6
+      learning_rate: 0.05
+  restoration:
+    logistic_regression:
+      C: 1.0
+      max_iter: 1000
+      class_weight: balanced
+    random_forest:
+      n_estimators: 200
+      max_depth: 12
+      min_samples_leaf: 4
+      class_weight: balanced
+    xgboost:
+      n_estimators: 300
+      max_depth: 6
+      learning_rate: 0.05
+      subsample: 0.8
+      colsample_bytree: 0.8
+    hist_gradient_boosting:
+      max_iter: 300
+      max_depth: 6
+      learning_rate: 0.05
+
+mlflow:
+  experiment_health: "coral_reef_health"
+  experiment_restoration: "coral_restoration_suitability"
+  registered_model_health: "CoralHealthClassifier"
+  registered_model_restoration: "CoralRestorationClassifier"
+
+monitoring:
+  drift_threshold: 0.10
+  reference_filename: "reference.csv"
+  production_filename: "production.csv"
+  report_filename: "drift_report.html"
+  # Fraction of samples to shift for the synthetic production drift demo
+  production_shift_fraction: 0.40
+
+shap:
+  background_samples: 500

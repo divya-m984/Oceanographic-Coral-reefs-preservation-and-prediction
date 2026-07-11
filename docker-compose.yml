@@ -1,0 +1,71 @@
+# docker-compose.yml — CoralSense MLOps services.
+# Populated fully in M11. Structure defined here for reference.
+#
+# Usage:
+#   docker compose up --build -d
+#   docker compose logs -f
+#   docker compose down
+
+services:
+
+  mlflow:
+    image: python:3.11-slim
+    container_name: coralsense-mlflow
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: >
+      bash -c "pip install mlflow>=3.0 --quiet &&
+               mlflow server
+                 --host 0.0.0.0
+                 --port 5000
+                 --backend-store-uri sqlite:///artifacts/mlruns.db
+                 --default-artifact-root ./artifacts/mlartifacts"
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: coralsense-api
+    depends_on:
+      - mlflow
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    volumes:
+      - ./models:/app/models
+      - ./artifacts:/app/artifacts
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: coralsense-dashboard
+    depends_on:
+      - api
+    environment:
+      - API_URL=http://api:8000
+      - STREAMLIT_PORT=8501
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    ports:
+      - "8501:8501"
+
+volumes:
+  artifacts:

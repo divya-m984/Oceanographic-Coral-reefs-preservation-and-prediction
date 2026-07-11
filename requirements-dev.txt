@@ -1,0 +1,7 @@
+# Minimal dependencies for M1 scaffold and tests only.
+# Install with: pip install -r requirements-dev.txt
+pyyaml>=6.0
+python-dotenv>=1.0
+pytest>=9.1
+pytest-cov>=6.0
+ruff>=0.11

@@ -1,0 +1,49 @@
+# requirements.txt — complete dependency list for CoralSense MLOps.
+#
+# Installation strategy:
+#   1. Create a virtual environment (see README.md).
+#   2. For M1 only (scaffold + tests):
+#        pip install -r requirements-dev.txt
+#   3. For the full stack (M2 onwards):
+#        pip install -r requirements.txt
+#
+# Python >= 3.11 required.  Tested on Python 3.14.6 / Arch Linux.
+
+# ── Core scientific stack ────────────────────────────────────────────────────
+numpy>=2.2
+pandas>=3.0
+scipy>=1.14
+
+# ── Machine learning ─────────────────────────────────────────────────────────
+scikit-learn>=1.9
+xgboost>=3.0
+shap>=0.52
+joblib>=1.4
+
+# ── API ──────────────────────────────────────────────────────────────────────
+fastapi>=0.130
+uvicorn[standard]>=0.30
+pydantic>=2.9
+httpx>=0.27          # FastAPI test client dependency
+
+# ── Dashboard ────────────────────────────────────────────────────────────────
+streamlit>=1.40
+plotly>=6.0
+folium>=0.19
+streamlit-folium>=0.22
+
+# ── MLOps ────────────────────────────────────────────────────────────────────
+mlflow>=3.0
+dvc>=3.50
+pandera>=0.20
+evidently>=0.4
+
+# ── Configuration / utilities ─────────────────────────────────────────────────
+pyyaml>=6.0
+python-dotenv>=1.0
+click>=8.1
+
+# ── Development / testing ─────────────────────────────────────────────────────
+pytest>=9.1
+pytest-cov>=6.0
+ruff>=0.11

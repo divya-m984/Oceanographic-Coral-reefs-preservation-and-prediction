@@ -1,0 +1,72 @@
+# dvc.yaml — CoralSense MLOps pipeline DAG.
+# Stages are filled in incrementally from M2 onwards.
+# Run with: dvc repro
+
+stages:
+  # M2 — Generate synthetic observations
+  generate:
+    cmd: python -m src.data.generate_data
+    deps:
+      - src/data/generate_data.py
+      - src/config.py
+      - params.yaml
+    params:
+      - base.random_seed
+      - data.n_samples
+      - data.regions
+      - data.noise_scale
+    outs:
+      - data/raw/observations.csv
+
+  # M3 — Validate schema with Pandera
+  validate:
+    cmd: python -m src.data.validate
+    deps:
+      - src/data/validate.py
+      - src/config.py
+      - data/raw/observations.csv
+    outs:
+      - data/raw/observations_validated.csv
+
+  # M4 — Preprocess and build features
+  preprocess:
+    cmd: python -m src.data.preprocess
+    deps:
+      - src/data/preprocess.py
+      - src/features/build_features.py
+      - src/config.py
+      - data/raw/observations_validated.csv
+    params:
+      - split.test_size
+      - split.val_size
+      - split.stratify
+      - features
+    outs:
+      - data/processed/
+
+  # M5 — Train models
+  train:
+    cmd: python -m src.models.train
+    deps:
+      - src/models/train.py
+      - src/models/evaluate.py
+      - src/config.py
+      - data/processed/
+    params:
+      - base.random_seed
+      - models
+    outs:
+      - models/
+
+  # M10 — Generate drift report
+  drift:
+    cmd: python -m src.monitoring.drift
+    deps:
+      - src/monitoring/drift.py
+      - src/config.py
+      - data/reference/
+      - data/production/
+    params:
+      - monitoring
+    outs:
+      - reports/drift_report.html

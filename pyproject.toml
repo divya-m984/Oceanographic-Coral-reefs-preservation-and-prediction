@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools>=72", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coralsense-mlops"
+version = "0.1.0"
+description = "MLOps-driven multi-sensor platform for coral reef health prediction and restoration planning."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "CoralSense Team" }]
+keywords = ["mlops", "coral reef", "marine biology", "machine learning"]
+
+# Core runtime dependencies (installed in later milestones).
+# Keep this list empty for M1 so pip install -e . is lightweight.
+dependencies = []
+
+[project.optional-dependencies]
+# M1 — scaffold / config only
+dev = [
+    "pytest>=9.1",
+    "pytest-cov>=6.0",
+    "ruff>=0.11",
+]
+# Full ML stack (added incrementally from M2 onwards)
+ml = [
+    "numpy>=2.2",
+    "pandas>=3.0",
+    "scikit-learn>=1.9",
+    "xgboost>=3.0",
+    "shap>=0.52",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    "joblib>=1.4",
+]
+api = [
+    "fastapi>=0.130",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.9",
+    "httpx>=0.27",      # for TestClient in pytest
+]
+dashboard = [
+    "streamlit>=1.40",
+    "plotly>=6.0",
+    "folium>=0.19",
+    "streamlit-folium>=0.22",
+]
+mlops = [
+    "mlflow>=3.0",
+    "dvc>=3.50",
+    "pandera>=0.20",
+    "evidently>=0.4",
+]
+# Everything at once (for CI or a full local install)
+all = [
+    "coralsense-mlops[ml,api,dashboard,mlops,dev]",
+]
+
+[project.scripts]
+coralsense-generate   = "src.data.generate_data:main"
+coralsense-validate   = "src.data.validate:main"
+coralsense-preprocess = "src.data.preprocess:main"
+coralsense-train      = "src.models.train:main"
+coralsense-evaluate   = "src.models.evaluate:main"
+coralsense-drift      = "src.monitoring.drift:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short --strict-markers"
+markers   = [
+    "unit: fast, isolated unit tests",
+    "integration: tests that touch the filesystem or external services",
+    "slow: tests that take more than a few seconds",
+]
+
+# ---------------------------------------------------------------------------
+# ruff (linter + formatter)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length    = 100
+src            = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = ["E501"]   # line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.coverage.run]
+source  = ["src"]
+omit    = ["tests/*", "src/dashboard/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty   = true
