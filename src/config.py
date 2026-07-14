@@ -138,6 +138,8 @@ class Config:
     mlflow_experiment_restoration: str
     mlflow_registered_health: str
     mlflow_registered_restoration: str
+    mlflow_champion_alias: str
+    quality_gates: dict[str, Any]
 
     drift_threshold: float
     reference_filename: str
@@ -153,7 +155,10 @@ class Config:
     # ── Runtime / environment ────────────────────────────────────────────────
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
     mlflow_tracking_uri: str = field(
-        default_factory=lambda: os.getenv("MLFLOW_TRACKING_URI", "sqlite:///artifacts/mlruns.db")
+        default_factory=lambda: os.getenv(
+            "MLFLOW_TRACKING_URI",
+            f"sqlite:///{_PROJECT_ROOT / 'artifacts' / 'mlruns.db'}",
+        )
     )
     mlflow_artifact_root: str = field(
         default_factory=lambda: os.getenv("MLFLOW_ARTIFACT_ROOT", "./artifacts/mlartifacts")
@@ -197,6 +202,8 @@ class Config:
             mlflow_experiment_restoration=p["mlflow"]["experiment_restoration"],
             mlflow_registered_health=p["mlflow"]["registered_model_health"],
             mlflow_registered_restoration=p["mlflow"]["registered_model_restoration"],
+            mlflow_champion_alias=p["mlflow"]["champion_alias"],
+            quality_gates=p["quality_gates"],
             # monitoring
             drift_threshold=p["monitoring"]["drift_threshold"],
             reference_filename=p["monitoring"]["reference_filename"],

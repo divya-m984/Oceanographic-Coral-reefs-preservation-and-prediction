@@ -104,8 +104,19 @@ models:
 mlflow:
   experiment_health: "coral_reef_health"
   experiment_restoration: "coral_restoration_suitability"
-  registered_model_health: "CoralHealthClassifier"
-  registered_model_restoration: "CoralRestorationClassifier"
+  registered_model_health: "coralsense_reef_health"
+  registered_model_restoration: "coralsense_restoration_suitability"
+  champion_alias: "champion"
+
+quality_gates:
+  # Minimum thresholds a candidate must meet before promotion.
+  # Set below current CV scores so legitimate candidates pass.
+  health:
+    min_cv_macro_f1: 0.70
+    min_cv_balanced_accuracy: 0.70
+  restoration:
+    min_cv_macro_f1: 0.73
+    min_cv_balanced_accuracy: 0.73
 
 monitoring:
   drift_threshold: 0.10
