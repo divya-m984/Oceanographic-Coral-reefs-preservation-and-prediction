@@ -1,0 +1,20 @@
+{
+  "health": {
+    "registered_model_name": "coralsense_reef_health",
+    "version": "4",
+    "algo_name": "logistic_regression",
+    "cv_macro_f1": 0.761172,
+    "gate_passed": true,
+    "gate_failures": [],
+    "champion_set": false
+  },
+  "restoration": {
+    "registered_model_name": "coralsense_restoration_suitability",
+    "version": "4",
+    "algo_name": "xgboost",
+    "cv_macro_f1": 0.791291,
+    "gate_passed": true,
+    "gate_failures": [],
+    "champion_set": false
+  }
+}

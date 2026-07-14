@@ -54,7 +54,7 @@ htmlcov/
 
 # Data (tracked by DVC, not git)
 data/raw/*.csv
-data/processed/*.csv
+data/processed/
 data/reference/*.csv
 data/production/*.csv
 

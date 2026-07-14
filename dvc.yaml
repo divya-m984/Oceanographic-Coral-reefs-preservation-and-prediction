@@ -1,15 +1,32 @@
-# dvc.yaml — CoralSense MLOps pipeline DAG.
-# Stages are filled in incrementally from M2 onwards.
-# Run with: dvc repro
+# dvc.yaml — CoralSense MLOps pipeline DAG (M7)
+#
+# Run with:
+#   dvc repro              # reproduce all changed stages
+#   dvc repro generate     # reproduce a single named stage
+#   dvc dag                # visualise the DAG
+#   dvc status             # show which stages are stale
+#   dvc metrics show       # display tracked metrics
+#   dvc params diff        # show param changes vs last run
+#
+# Design notes
+# ------------
+# - No hardcoded absolute paths; all paths derive from src/config.py.
+# - params.yaml is the single source of truth for all tunable values.
+# - The MLflow database (artifacts/mlruns.db) is NOT a DVC output; it is
+#   managed exclusively by MLflow to avoid unnecessary pipeline invalidation.
+# - The register_candidate stage registers a new model version but does NOT
+#   promote the champion alias.  Champion promotion remains a controlled
+#   manual step via:  python -m src.models.registry --promote
 
 stages:
-  # M2 — Generate synthetic observations
+
+  # ── M2 ────────────────────────────────────────────────────────────────────
   generate:
-    cmd: python -m src.data.generate_data
+    cmd: .venv/bin/python -m src.data.generate_data
+    desc: "Generate synthetic coral reef observations from documented statistical rules."
     deps:
       - src/data/generate_data.py
       - src/config.py
-      - params.yaml
     params:
       - base.random_seed
       - data.n_samples
@@ -18,9 +35,10 @@ stages:
     outs:
       - data/raw/observations.csv
 
-  # M3 — Validate schema with Pandera
+  # ── M3 ────────────────────────────────────────────────────────────────────
   validate:
-    cmd: python -m src.data.validate
+    cmd: .venv/bin/python -m src.data.validate
+    desc: "Validate the generated dataset against the Pandera schema. Stops the pipeline on failure."
     deps:
       - src/data/validate.py
       - src/config.py
@@ -28,25 +46,26 @@ stages:
     outs:
       - data/raw/observations_validated.csv
 
-  # M4 — Preprocess and build features
+  # ── M4 ────────────────────────────────────────────────────────────────────
   preprocess:
-    cmd: python -m src.data.preprocess
+    cmd: .venv/bin/python -m src.data.preprocess --input data/raw/observations_validated.csv
+    desc: "Stratified train/test split, feature engineering, and ColumnTransformer fitting."
     deps:
       - src/data/preprocess.py
       - src/features/build_features.py
       - src/config.py
       - data/raw/observations_validated.csv
     params:
-      - split.test_size
-      - split.val_size
-      - split.stratify
+      - base.random_seed
+      - split
       - features
     outs:
       - data/processed/
 
-  # M5 — Train models
+  # ── M5 ────────────────────────────────────────────────────────────────────
   train:
-    cmd: python -m src.models.train
+    cmd: .venv/bin/python -m src.models.train --task all
+    desc: "Train LR/RF/XGBoost for both tasks; select best by CV macro-F1; log to MLflow."
     deps:
       - src/models/train.py
       - src/models/evaluate.py
@@ -54,19 +73,41 @@ stages:
       - data/processed/
     params:
       - base.random_seed
-      - models
+      - models.cv_folds
+      - models.health
+      - models.restoration
     outs:
-      - models/
+      - models/best_model_health.joblib
+      - models/best_model_restoration.joblib
+      - models/evaluation_health.json
+      - models/evaluation_restoration.json
 
-  # M10 — Generate drift report
-  drift:
-    cmd: python -m src.monitoring.drift
+  # ── M7 evaluate ───────────────────────────────────────────────────────────
+  evaluate:
+    cmd: .venv/bin/python -m src.models.run_evaluate
+    desc: "Extract key metrics from evaluation JSONs into a single DVC metrics file."
     deps:
-      - src/monitoring/drift.py
+      - src/models/run_evaluate.py
       - src/config.py
-      - data/reference/
-      - data/production/
-    params:
-      - monitoring
+      - models/evaluation_health.json
+      - models/evaluation_restoration.json
+    metrics:
+      - reports/metrics.json:
+          cache: false
+
+  # ── M7 register_candidate ─────────────────────────────────────────────────
+  register_candidate:
+    cmd: .venv/bin/python -m src.models.run_register_candidate
+    desc: "Register best models as MLflow candidates. Champion alias is NOT updated here."
+    deps:
+      - src/models/run_register_candidate.py
+      - src/models/registry.py
+      - src/config.py
+      - models/best_model_health.joblib
+      - models/best_model_restoration.joblib
+      - models/evaluation_health.json
+      - models/evaluation_restoration.json
+      - reports/metrics.json
     outs:
-      - reports/drift_report.html
+      - reports/candidate_registration.json:
+          cache: false
