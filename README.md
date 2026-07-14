@@ -69,6 +69,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs five jobs on every
 - The canonical MLflow database (`artifacts/mlruns.db`) — never opened; CI uses `sqlite:///ci_mlruns.db`.
 - DVC data pull — no remote is configured; pipeline-validation uses isolated temp data.
 - Model artifacts (`models/*.joblib`) — not uploaded; build artifact contains only the Python package.
+- The `run_drift` DVC stage — never run in CI; requires real champion models and takes ~30s.
 
 ### Local equivalent
 
@@ -350,8 +351,11 @@ uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 # Terminal 2:
 streamlit run src/dashboard/app.py
 
-# M11 — Generate Evidently drift report
-python -m src.monitoring.drift
+# M11 — Run drift monitoring (feature, prediction, confidence drift)
+python -m src.monitoring.run_drift                  # standard shift, with HTML reports
+python -m src.monitoring.run_drift --no-html        # faster, JSON summary only
+python -m src.monitoring.run_drift --shift-scale 0  # zero-shift baseline (no drift expected)
+python -m src.monitoring.run_drift --shift-scale 2  # stronger simulated degradation
 
 # M12 — Start all services via Docker Compose
 docker compose up --build

@@ -119,10 +119,20 @@ quality_gates:
     min_cv_balanced_accuracy: 0.73
 
 monitoring:
-  drift_threshold: 0.10
+  drift_threshold: 0.10        # p-value threshold for declaring a column drifted
   reference_filename: "reference.csv"
   production_filename: "production.csv"
-  report_filename: "drift_report.html"
+  summary_filename: "drift_summary.json"
+  report_filename_health: "drift_report_health.html"
+  report_filename_restoration: "drift_report_restoration.html"
+  reference_n: 1500            # rows sampled from raw data for the reference window
+  production_n: 1500           # rows sampled from raw data for the production window
+  shift_scale: 1.0             # magnitude of synthetic distribution shift (0 = no shift)
+  # Applied shifts at shift_scale=1.0:
+  #   water_temperature_c  +3.0 °C  (thermal bleaching event)
+  #   bleaching_percentage +20 pp   (increased bleaching)
+  #   coral_cover_percentage -15 pp (coral loss)
+  #   turbidity_ntu        +5.0     (reduced water clarity)
   # Fraction of samples to shift for the synthetic production drift demo
   production_shift_fraction: 0.40
 

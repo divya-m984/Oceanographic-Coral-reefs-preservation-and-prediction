@@ -931,3 +931,102 @@ class TestAppSmoke:
             at = self._get_at("src/dashboard/pages/6_Model_Performance.py")
             at.run()
             assert len(at.exception) == 0
+
+    def test_drift_page_shows_instructions_when_no_summary(self):
+        """Page 8 shows instructions when drift_summary.json is absent."""
+        from src.dashboard.api_client import APIError
+
+        # drift_summary.json has not been generated yet in this project —
+        # the page should render the instructions panel without crashing.
+        page_path = "src/dashboard/pages/8_Drift_Monitoring.py"
+        with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
+            MockClient.return_value.health.side_effect = APIError("offline")
+            at = self._get_at(page_path)
+            at.run()
+            assert len(at.exception) == 0
+
+    def test_drift_page_renders_with_summary(self):
+        """Page 8 renders full drift results when drift_summary.json exists."""
+        from src.dashboard.api_client import APIError
+
+        drift_summary = {
+            "generated_at": "2026-07-14T12:00:00+00:00",
+            "shift_scale": 1.0,
+            "reference_n": 100,
+            "production_n": 100,
+            "drift_threshold": 0.10,
+            "feature_drift": {
+                "drifted_count": 2,
+                "total_columns": 15,
+                "drifted_share": 0.13,
+                "per_column": {
+                    "water_temperature_c": {
+                        "drifted": True,
+                        "p_value": 0.001,
+                        "method": "K-S p_value",
+                    },
+                    "turbidity_ntu": {"drifted": True, "p_value": 0.03, "method": "K-S p_value"},
+                    "ph": {"drifted": False, "p_value": 0.45, "method": "K-S p_value"},
+                },
+            },
+            "prediction_drift": {
+                "health": {
+                    "drifted": True,
+                    "p_value": 0.002,
+                    "statistic": 12.5,
+                    "method": "chi2",
+                    "reference_distribution": {"healthy": 0.5, "stressed": 0.3, "bleached": 0.2},
+                    "current_distribution": {"healthy": 0.2, "stressed": 0.5, "bleached": 0.3},
+                },
+                "restoration": {
+                    "drifted": False,
+                    "p_value": 0.55,
+                    "statistic": 1.2,
+                    "method": "chi2",
+                    "reference_distribution": {
+                        "suitable": 0.6,
+                        "moderately_suitable": 0.3,
+                        "unsuitable": 0.1,
+                    },
+                    "current_distribution": {
+                        "suitable": 0.55,
+                        "moderately_suitable": 0.35,
+                        "unsuitable": 0.1,
+                    },
+                },
+            },
+            "confidence_drift": {
+                "health": {
+                    "drifted": True,
+                    "p_value": 0.001,
+                    "statistic": 0.45,
+                    "method": "ks",
+                    "mean_reference": 0.92,
+                    "mean_current": 0.71,
+                    "delta": -0.21,
+                },
+                "restoration": {
+                    "drifted": False,
+                    "p_value": 0.32,
+                    "statistic": 0.12,
+                    "method": "ks",
+                    "mean_reference": 0.88,
+                    "mean_current": 0.85,
+                    "delta": -0.03,
+                },
+            },
+            "recommendation": "RETRAIN RECOMMENDED: Significant feature drift detected.",
+            "synthetic_data_disclaimer": "Synthetic data only.",
+        }
+        summary_path = _PROJECT_ROOT / "reports" / "drift_summary.json"
+        # Write temporarily; clean up after test
+        summary_path.write_text(json.dumps(drift_summary))
+        try:
+            page_path = "src/dashboard/pages/8_Drift_Monitoring.py"
+            with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
+                MockClient.return_value.health.side_effect = APIError("offline")
+                at = self._get_at(page_path)
+                at.run()
+                assert len(at.exception) == 0
+        finally:
+            summary_path.unlink(missing_ok=True)

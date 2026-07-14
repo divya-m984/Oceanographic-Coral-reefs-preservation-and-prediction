@@ -111,3 +111,34 @@ stages:
     outs:
       - reports/candidate_registration.json:
           cache: false
+
+  # ── M11 run_drift ──────────────────────────────────────────────────────────
+  run_drift:
+    cmd: .venv/bin/python -m src.monitoring.run_drift --no-html
+    desc: >
+      Generate reference and production windows, run predictions via champion
+      models, compute feature/prediction/confidence drift. Saves
+      reports/drift_summary.json. HTML reports are excluded from this DVC stage
+      (they are large and regenerated on demand via the CLI without --no-html).
+    deps:
+      - src/monitoring/run_drift.py
+      - src/monitoring/drift.py
+      - src/monitoring/generate_production.py
+      - src/config.py
+      - data/raw/observations.csv
+      - models/best_model_health.joblib
+      - models/best_model_restoration.joblib
+      - data/processed/preprocessor_health.joblib
+      - data/processed/preprocessor_restoration.joblib
+    params:
+      - base.random_seed
+      - monitoring.reference_n
+      - monitoring.production_n
+      - monitoring.shift_scale
+      - monitoring.drift_threshold
+    outs:
+      - data/reference/reference.csv
+      - data/production/production.csv
+    metrics:
+      - reports/drift_summary.json:
+          cache: false
