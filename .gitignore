@@ -29,6 +29,9 @@ ENV/
 # MLflow
 mlruns/
 mlartifacts/
+# Root-level mlflow.db is the empty SQLite default created by MLflow on first import.
+# The canonical database lives at artifacts/mlruns.db and IS tracked.
+/mlflow.db
 
 # DVC
 /tmp/
