@@ -343,6 +343,7 @@ class TestDvcYaml:
         "train",
         "evaluate",
         "register_candidate",
+        "run_drift",
     }
 
     @pytest.fixture(autouse=True)

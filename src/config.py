@@ -146,6 +146,12 @@ class Config:
     production_filename: str
     drift_report_filename: str
     production_shift_fraction: float
+    drift_summary_filename: str
+    drift_report_filename_health: str
+    drift_report_filename_restoration: str
+    reference_n: int
+    production_n: int
+    shift_scale: float
 
     shap_background_samples: int
 
@@ -208,8 +214,14 @@ class Config:
             drift_threshold=p["monitoring"]["drift_threshold"],
             reference_filename=p["monitoring"]["reference_filename"],
             production_filename=p["monitoring"]["production_filename"],
-            drift_report_filename=p["monitoring"]["report_filename"],
+            drift_report_filename=p["monitoring"]["report_filename_health"],
             production_shift_fraction=p["monitoring"]["production_shift_fraction"],
+            drift_summary_filename=p["monitoring"]["summary_filename"],
+            drift_report_filename_health=p["monitoring"]["report_filename_health"],
+            drift_report_filename_restoration=p["monitoring"]["report_filename_restoration"],
+            reference_n=p["monitoring"]["reference_n"],
+            production_n=p["monitoring"]["production_n"],
+            shift_scale=p["monitoring"]["shift_scale"],
             # shap
             shap_background_samples=p["shap"]["background_samples"],
             # paths
@@ -230,7 +242,27 @@ class Config:
 
     @property
     def drift_report_path(self) -> Path:
-        return self.paths.reports_dir / self.drift_report_filename
+        return self.paths.reports_dir / self.drift_report_filename_health
+
+    @property
+    def drift_summary_path(self) -> Path:
+        return self.paths.reports_dir / self.drift_summary_filename
+
+    @property
+    def monitoring(self) -> dict:
+        """Return monitoring params as a dict (for generate_production.py and drift.py)."""
+        return {
+            "drift_threshold": self.drift_threshold,
+            "reference_filename": self.reference_filename,
+            "production_filename": self.production_filename,
+            "summary_filename": self.drift_summary_filename,
+            "report_filename_health": self.drift_report_filename_health,
+            "report_filename_restoration": self.drift_report_filename_restoration,
+            "reference_n": self.reference_n,
+            "production_n": self.production_n,
+            "shift_scale": self.shift_scale,
+            "production_shift_fraction": self.production_shift_fraction,
+        }
 
 
 # ---------------------------------------------------------------------------

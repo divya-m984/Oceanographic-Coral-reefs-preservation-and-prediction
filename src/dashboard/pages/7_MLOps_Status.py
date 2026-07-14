@@ -118,22 +118,24 @@ PIPELINE = [
         "src/api/main.py",
     ),
     (
-        STATUS_CURRENT,
+        STATUS_DONE,
         "M10",
         "Dashboard",
         "Streamlit UI",
-        "7-page Streamlit dashboard. Interactive reef map, habitat analysis, "
-        "restoration planning, live prediction form, model performance, MLOps status.",
+        "8-page Streamlit dashboard. Interactive reef map, habitat analysis, "
+        "restoration planning, live prediction form, model performance, MLOps status, drift monitoring.",
         "src/dashboard/",
     ),
     (
-        STATUS_PLANNED,
+        STATUS_CURRENT,
         "M11",
         "Drift Monitoring",
         "Evidently AI",
-        "Statistical drift detection on synthetic production data. "
-        "Population Stability Index, feature drift reports. (Not yet implemented.)",
-        "src/monitoring/drift.py (planned)",
+        "Statistical drift detection on synthetic production window. Feature drift (KS test), "
+        "prediction-distribution drift (chi-squared), confidence drift (KS test). "
+        "Configurable shift magnitude. JSON summary + optional HTML reports. "
+        "DVC run_drift stage. CLI: python -m src.monitoring.run_drift",
+        "src/monitoring/drift.py, src/monitoring/run_drift.py",
     ),
     (
         STATUS_PLANNED,
