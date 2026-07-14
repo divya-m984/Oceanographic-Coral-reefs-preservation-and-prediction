@@ -472,6 +472,114 @@ New test file: `tests/test_ci_workflow.py` (26 tests):
 
 ---
 
+### M9 — FastAPI Inference Service
+
+#### Files created
+
+| File | Description |
+|---|---|
+| `src/api/schemas.py` | Pydantic v2 request/response models with strict field validation |
+| `src/api/model_loader.py` | `ModelLoader` singleton: graceful load, safe metadata, no fit/register |
+| `src/api/main.py` | FastAPI app: 7 endpoints, lifespan startup, Annotated dependency pattern |
+| `tests/test_api.py` | 83 isolated tests using `FakeModelLoader` + `FakeInferencePipeline` |
+
+#### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Project index and documentation links |
+| `GET` | `/health` | Liveness and model readiness (200 even when degraded) |
+| `GET` | `/model-info` | Safe champion metadata — no paths or URIs exposed |
+| `POST` | `/predict/reef-health` | Single reef-health prediction |
+| `POST` | `/predict/restoration` | Single restoration-suitability prediction |
+| `POST` | `/predict/both` | Both predictions for one observation |
+| `POST` | `/predict/batch` | Batch predictions (max 50 observations, configurable) |
+
+#### Key design decisions
+
+- **Graceful degradation**: `ModelLoader.load()` catches exceptions silently; failed models return `None`. Endpoints return 503 for unavailable models rather than crashing the app.
+- **Dependency injection**: `get_loader` is a FastAPI dependency injected via `app.dependency_overrides` in tests — no real models needed.
+- **Test isolation**: `TestClient` used without context manager (`with`) to skip lifespan; `FakeModelLoader` / `FakeInferencePipeline` provide deterministic outputs.
+- **Ruff B008 avoidance**: `LoaderDep = Annotated[ModelLoader, Depends(get_loader)]` type alias prevents B008 (no `Depends()` call in default parameter values).
+- **No server state exposure**: `model_info()` returns only safe presentation fields; joblib paths, MLflow URIs, and internal config are excluded.
+- **Finite-float guard**: `ObservationInput` model validator rejects `NaN` and `Inf` in any numeric field.
+- **Extra-field rejection**: `ConfigDict(extra="forbid")` prevents target labels (`reef_health`, `restoration_suitability`) from being submitted as input features.
+
+#### Input validation (ObservationInput)
+
+All 16 inference features are required with domain-appropriate bounds matching `src/data/validate.py`:
+
+| Feature | Type | Range |
+|---|---|---|
+| `region` | Literal | Lakshadweep, Gulf of Mannar, Gulf of Kutch, Andaman and Nicobar Islands |
+| `depth_m` | float | [0, 50] m |
+| `water_temperature_c` | float | [10, 42] °C |
+| `ph` | float | [7.0, 9.0] |
+| `salinity_ppt` | float | [20, 50] ppt |
+| `dissolved_oxygen_mg_l` | float | [0, 15] mg/L |
+| `turbidity_ntu` | float | [0, 100] NTU |
+| `light_intensity` | float | [0, 3000] µmol m⁻² s⁻¹ |
+| `current_speed_m_s` | float | [0, 5] m/s |
+| `sonar_backscatter` | float | [−60, 0] dB |
+| `rugosity_index` | float | [1, 10] |
+| `hard_substrate_percentage` | float | [0, 100] % |
+| `acoustic_complexity_index` | float | [0, 1] |
+| `coral_cover_percentage` | float | [0, 100] % |
+| `bleaching_percentage` | float | [0, 100] % |
+| `disease_percentage` | float | [0, 100] % |
+
+Optional spatial metadata (`timestamp`, `latitude`, `longitude`) is accepted but not used for inference.
+
+#### Integration test results (Gulf of Mannar observation, real champion models)
+
+```
+GET /health → 200
+{
+  "status": "ok",
+  "health_model_ready": true,
+  "restoration_model_ready": true
+}
+
+POST /predict/both →
+  health:      predicted_class="healthy",  confidence=0.9847
+  restoration: predicted_class="suitable", confidence=0.9919
+```
+
+#### Test suite
+
+```bash
+pytest tests/test_api.py -q
+# 83 passed in 4.05s
+
+pytest tests/ -q
+# 498 passed in 295s  (415 previous + 83 new API tests)
+```
+
+New test file: `tests/test_api.py` (83 tests across 10 classes):
+- `TestRootEndpoint` — 4 tests: 200, required fields, endpoints list, disclaimer
+- `TestHealthEndpoint` — 7 tests: ok/degraded status, per-model flags, timestamp, timestamp format, 503 when loader missing
+- `TestModelInfoEndpoint` — 6 tests: both models available/unavailable, disclaimer, no path leakage
+- `TestReefHealthEndpoint` — 11 tests: valid predict, 503 when unavailable, 422 on invalid input (OOB values, bad region, missing fields, NaN, Inf, extra fields), correct task field
+- `TestRestorationEndpoint` — 8 tests: analogous to reef-health
+- `TestBothEndpoint` — 8 tests: both predictions returned, 503 variants, invalid input
+- `TestBatchEndpoint` — 12 tests: single/multi row, batch-too-large (422), empty batch (422), model unavailable (503), invalid obs in batch
+- `TestProbabilityIntegrity` — 10 tests: proba keys match label sets for health and restoration in single and batch modes
+- `TestPredictionResponseFields` — 9 tests: all required PredictionResponse fields present
+- `TestRootEndpointWithoutLoader` — 1 test: root endpoint works even when loader is None (no model dependency)
+- `TestServiceHealth503` — 7 tests: loader None → 503 (health, model-info, predict endpoints)
+
+#### Dataset integrity
+
+`data/raw/observations.csv`: 15,000 rows, 21 columns confirmed.
+
+#### Registry integrity after M9
+
+- `coralsense_reef_health` v1 (Logistic Regression): champion alias unchanged.
+- `coralsense_restoration_suitability` v1 (XGBoost): champion alias unchanged.
+- No new model versions registered during M9 (API is read-only).
+
+---
+
 ## Current Limitations
 
 - MLflow file store (`mlruns/`) is in maintenance mode as of MLflow 3.14.0; all tracking uses the SQLite backend.
@@ -481,13 +589,12 @@ New test file: `tests/test_ci_workflow.py` (26 tests):
 - `mlflow.db` at project root is unused — not deleted to avoid unintended changes.
 - No DVC remote configured; CI uses isolated temp data instead of `dvc pull`.
 - Python 3.14 is not yet officially supported by GitHub Actions; CI uses Python 3.12.
-- No FastAPI serving, Streamlit UI, drift monitoring, or Docker deployment yet.
+- Streamlit UI, drift monitoring, and Docker deployment not yet implemented.
 
 ---
 
-## Planned Next Steps (M9+)
+## Planned Next Steps (M10+)
 
-- M9: FastAPI inference endpoint (`src/api/main.py`, `src/api/schemas.py`)
 - M10: Streamlit dashboard (`src/dashboard/app.py`)
 - M11: Evidently AI drift monitoring (`src/monitoring/drift.py`)
 - M12: Docker containerisation and `docker compose up --build`
