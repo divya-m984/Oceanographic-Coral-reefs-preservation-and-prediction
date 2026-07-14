@@ -1,0 +1,57 @@
+# Dockerfile.mlflow — CoralSense MLflow tracking server.
+#
+# Design
+# ------
+# - Copies the read-only canonical database into a writable named volume via
+#   docker/init_mlflow.sh (which rewrites host-absolute artifact paths).
+# - The canonical database at /app/artifacts/mlruns.db is mounted read-only
+#   and is NEVER modified by this container.
+# - The runtime copy is discarded on `docker compose down -v`.
+# - No model is trained, registered, or promoted inside this container.
+#
+# SYNTHETIC-DATA DISCLAIMER
+# All experiment metadata, run metrics, and registered model information
+# reflect performance on SYNTHETIC data only.  Do not use to guide
+# real-world conservation decisions.
+
+# syntax=docker/dockerfile:1
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# Install only what is needed: mlflow + the SQLite / artifact stack.
+# Pin to the same major used locally so DB schema is compatible.
+RUN pip install --upgrade pip \
+    && pip install "mlflow>=3.14,<4" "psutil"
+
+# Create non-root user
+RUN groupadd -r coralsense \
+    && useradd -r -g coralsense -d /app -s /sbin/nologin coralsense
+
+# Copy init script (read-only canonical DB is bind-mounted at runtime)
+COPY docker/init_mlflow.sh /app/docker/init_mlflow.sh
+RUN chmod +x /app/docker/init_mlflow.sh
+
+# Create the runtime directory with correct ownership so that when Docker
+# initialises the named volume (mlflow-runtime) it copies these permissions
+# into the empty volume, giving the non-root user write access.
+RUN mkdir -p /mlflow-runtime \
+    && chown -R coralsense:coralsense /app /mlflow-runtime
+
+USER coralsense
+
+EXPOSE 5000
+
+# Health check via Python stdlib (no curl dependency)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c \
+        "import urllib.request, sys; \
+         r = urllib.request.urlopen('http://localhost:5000/health', timeout=8); \
+         sys.exit(0 if r.status == 200 else 1)"
+
+# init_mlflow.sh copies the canonical DB, rewrites paths, then exec's mlflow server.
+ENTRYPOINT ["/app/docker/init_mlflow.sh"]

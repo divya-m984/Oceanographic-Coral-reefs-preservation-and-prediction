@@ -1,4 +1,4 @@
-# .github/workflows/ci.yml — CoralSense MLOps CI pipeline (M8)
+# .github/workflows/ci.yml — CoralSense MLOps CI pipeline (M8, updated M12)
 #
 # Triggers: push / PR to master or main, manual workflow_dispatch.
 #
@@ -6,6 +6,9 @@
 # ----
 # code-quality         Lint and format check (ruff).
 # tests                Full pytest suite with a CI-safe temporary MLflow DB.
+#                      Includes Docker structural tests (test_docker.py) and
+#                      bundle subsystem tests (test_bundle.py) — no Docker
+#                      daemon required; all checks are file-based.
 # pipeline-validation  DVC DAG check, pipeline structure tests, isolated data round-trip.
 # ml-smoke-test        Quick ML training on temp data; verifies predictions and metrics.
 # build                Python package build; uploads dist/ artifact.

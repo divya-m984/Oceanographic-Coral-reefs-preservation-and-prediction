@@ -11,7 +11,7 @@
 
 # ── Core scientific stack ────────────────────────────────────────────────────
 numpy>=2.2
-pandas>=3.0
+pandas>=2.0
 scipy>=1.14
 
 # ── Machine learning ─────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ streamlit-folium>=0.22
 mlflow>=3.0
 dvc>=3.50
 pandera>=0.20
-evidently>=0.4
+evidently>=0.7
 
 # ── Configuration / utilities ─────────────────────────────────────────────────
 pyyaml>=6.0

@@ -1,71 +1,186 @@
-# docker-compose.yml — CoralSense MLOps services.
-# Populated fully in M11. Structure defined here for reference.
+# docker-compose.yml — CoralSense MLOps local demonstration stack.
 #
-# Usage:
+# Services
+# --------
+#   mlflow     MLflow tracking UI on port 5000   (always started)
+#   api        FastAPI inference service on 8000  (always started)
+#   dashboard  Streamlit dashboard on 8501        (always started)
+#   drift      One-shot drift report              (profile: drift)
+#
+# Prerequisites
+# -------------
+# Before the first `docker compose build` run:
+#   python scripts/export_champions.py
+#   python scripts/verify_deployment_bundle.py
+#
+# Quick start
+# -----------
 #   docker compose up --build -d
 #   docker compose logs -f
 #   docker compose down
+#
+# To run drift monitoring:
+#   docker compose --profile drift up drift
+#   docker compose --profile drift up drift -e DRIFT_SHIFT_SCALE=2.0
+#
+# To remove all containers AND named volumes (runtime DB + reports):
+#   docker compose down -v
+#
+# PORTABILITY NOTE
+# ----------------
+# No host-absolute path is hardcoded.  All mounts use relative paths from
+# the project root or named volumes.  The MLflow service rewrites the
+# host-absolute artifact paths stored in the canonical DB automatically.
+#
+# SAFETY GUARANTEES
+# -----------------
+# - artifacts/mlruns.db is mounted read-only; it is NEVER modified.
+# - No model is trained, registered, or promoted at runtime.
+# - The API loads models from deploy/bundles/ (bundle mode, no MLflow network call).
+# - All predictions are generated from SYNTHETIC data.
 
 services:
 
+  # ── MLflow tracking server ────────────────────────────────────────────────
   mlflow:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
     container_name: coralsense-mlflow
-    working_dir: /app
     volumes:
-      - .:/app
-    command: >
-      bash -c "pip install mlflow>=3.0 --quiet &&
-               mlflow server
-                 --host 0.0.0.0
-                 --port 5000
-                 --backend-store-uri sqlite:///artifacts/mlruns.db
-                 --default-artifact-root ./artifacts/mlartifacts"
+      # Canonical DB mounted read-only — init script copies it before starting
+      - ./artifacts:/app/artifacts:ro
+      # Actual artifact files referenced by the DB
+      - ./mlruns:/app/mlruns:ro
+      # Writable named volume for the runtime DB copy
+      - mlflow-runtime:/mlflow-runtime
     ports:
-      - "5000:5000"
+      - "${MLFLOW_PORT:-5000}:5000"
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - |
+          import urllib.request, sys
+          try:
+              r = urllib.request.urlopen('http://localhost:5000/health', timeout=8)
+              sys.exit(0 if r.status == 200 else 1)
+          except Exception:
+              sys.exit(1)
       interval: 30s
       timeout: 10s
+      start_period: 60s
       retries: 3
 
+  # ── FastAPI inference service ─────────────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
     container_name: coralsense-api
-    depends_on:
-      - mlflow
     environment:
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-    volumes:
-      - ./models:/app/models
-      - ./artifacts:/app/artifacts
+      # Bundle mode: load from deploy/bundles/ — no MLflow network call
+      CORALSENSE_MODEL_MODE: bundle
+      CORALSENSE_BUNDLE_PATH: /app/deploy/bundles
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - |
+          import urllib.request, sys
+          try:
+              r = urllib.request.urlopen('http://localhost:8000/health', timeout=8)
+              sys.exit(0 if r.status == 200 else 1)
+          except Exception:
+              sys.exit(1)
       interval: 30s
       timeout: 10s
+      start_period: 60s
       retries: 3
 
+  # ── Streamlit dashboard ───────────────────────────────────────────────────
   dashboard:
     build:
       context: .
       dockerfile: Dockerfile.dashboard
     container_name: coralsense-dashboard
-    depends_on:
-      - api
     environment:
-      - API_URL=http://api:8000
-      - STREAMLIT_PORT=8501
+      CORALSENSE_API_URL: "http://api:8000"
+      STREAMLIT_SERVER_PORT: "8501"
+      STREAMLIT_SERVER_ADDRESS: "0.0.0.0"
+      STREAMLIT_SERVER_HEADLESS: "true"
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
     volumes:
-      - ./data:/app/data
-      - ./reports:/app/reports
+      # Observation data for visualisation (read-only)
+      - ./data/raw:/app/data/raw:ro
+      # Reference window (written by drift stage, read by dashboard)
+      - ./data/reference:/app/data/reference:ro
+      # Drift reports (written by drift container, read by page 8)
+      - ./reports:/app/reports:ro
     ports:
-      - "8501:8501"
+      - "${DASHBOARD_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - |
+          import urllib.request, sys
+          try:
+              r = urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=8)
+              sys.exit(0 if r.status == 200 else 1)
+          except Exception:
+              sys.exit(1)
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
 
+  # ── Drift monitoring (optional profile) ───────────────────────────────────
+  drift:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: coralsense-drift
+    profiles:
+      - drift
+    # Run as the host user so it can write to bind-mounted data/ directories.
+    # Set HOST_UID / HOST_GID in .env (default 1000:1000) or export before running:
+    #   export HOST_UID=$(id -u) HOST_GID=$(id -g)
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      CORALSENSE_MODEL_MODE: bundle
+      CORALSENSE_BUNDLE_PATH: /app/deploy/bundles
+      DRIFT_SHIFT_SCALE: "${DRIFT_SHIFT_SCALE:-1.0}"
+    volumes:
+      # Raw observations for generating reference/production windows
+      - ./data/raw:/app/data/raw:ro
+      # Reference and production CSVs written here (requires write access)
+      - ./data/reference:/app/data/reference
+      - ./data/production:/app/data/production
+      # Drift reports written here (shared with dashboard via bind mount)
+      - ./reports:/app/reports
+    command:
+      - "/bin/sh"
+      - "/app/docker/init_drift.sh"
+    restart: "no"
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+# Note: reports/ is a bind mount (./reports) so the host user can inspect
+# drift reports directly and the drift container (running as host UID) can write.
 volumes:
-  artifacts:
+  # Writable runtime copy of the MLflow SQLite database.
+  # Discarded on `docker compose down -v` — canonical DB is always safe.
+  mlflow-runtime:
