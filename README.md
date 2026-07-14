@@ -15,15 +15,16 @@
 
 1. [Project Overview](#project-overview)
 2. [Architecture](#architecture)
-3. [Requirements](#requirements)
-4. [Setup](#setup)
-5. [Configuration](#configuration)
-6. [Development Commands](#development-commands)
-7. [Milestone Commands](#milestone-commands)
-8. [Running Tests](#running-tests)
-9. [Docker](#docker)
-10. [Project Structure](#project-structure)
-11. [Scientific Assumptions](#scientific-assumptions)
+3. [CI Status](#ci-status)
+4. [Requirements](#requirements)
+5. [Setup](#setup)
+6. [Configuration](#configuration)
+7. [Development Commands](#development-commands)
+8. [Milestone Commands](#milestone-commands)
+9. [Running Tests](#running-tests)
+10. [Docker](#docker)
+11. [Project Structure](#project-structure)
+12. [Scientific Assumptions](#scientific-assumptions)
 
 ---
 
@@ -42,6 +43,47 @@ The platform covers four Indian reef regions:
 - Gulf of Mannar
 - Gulf of Kutch
 - Andaman and Nicobar Islands
+
+---
+
+## CI Status
+
+The GitHub Actions workflow (`.github/workflows/ci.yml`) runs five jobs on every push and pull request to `master` or `main`, and can also be triggered manually.
+
+### What runs on every push / pull request
+
+| Job | What it does | Timeout |
+|---|---|---|
+| **code-quality** | `ruff check` + `ruff format --check` on `src/`, `tests/`, `scripts/` | 10 min |
+| **tests** | Full 415-test suite with a disposable MLflow database | 30 min |
+| **pipeline-validation** | `dvc dag`, DVC YAML structure tests, isolated data round-trip (400 rows) | 10 min |
+| **ml-smoke-test** | Quick training of both tasks on 500 rows; verifies predictions and metrics | 15 min |
+| **build** | `python -m build` (wheel + sdist); uploads `dist/` artifact | 10 min |
+
+### What is intentionally excluded from CI
+
+- The full 10-minute DVC pipeline (`dvc repro`) — never run on push.
+- The `register_candidate` stage — never invoked; no model versions are added.
+- Champion promotion (`--promote`) — never run; canonical registry is read-only.
+- The canonical MLflow database (`artifacts/mlruns.db`) — never opened; CI uses `sqlite:///ci_mlruns.db`.
+- DVC data pull — no remote is configured; pipeline-validation uses isolated temp data.
+- Model artifacts (`models/*.joblib`) — not uploaded; build artifact contains only the Python package.
+
+### Local equivalent
+
+Run the same checks locally without modifying real project artifacts:
+
+```bash
+bash scripts/ci_check.sh
+```
+
+This script:
+1. Runs `ruff check` and `ruff format --check`
+2. Runs the full test suite with `MLFLOW_TRACKING_URI=sqlite:///ci_check_mlruns.db`
+3. Runs `scripts/ci_validate_pipeline.py` (isolated temp data)
+4. Runs `scripts/ci_smoke_test.py` (isolated temp MLflow DB)
+
+The temporary MLflow database (`ci_check_mlruns.db`) is deleted on exit.
 
 ---
 

@@ -56,6 +56,7 @@ def _build_predict_env(tmp_path_factory, cfg, task: str) -> dict[str, Any]:
         n_jobs=1,
     )
     from mlflow import MlflowClient
+
     from src.models.registry import promote_champion
 
     reg_results = run_register_and_promote(
