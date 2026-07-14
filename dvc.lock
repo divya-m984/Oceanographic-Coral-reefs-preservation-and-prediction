@@ -1,0 +1,256 @@
+schema: '2.0'
+stages:
+  generate:
+    cmd: .venv/bin/python -m src.data.generate_data
+    deps:
+    - path: src/config.py
+      hash: md5
+      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
+      size: 10549
+    - path: src/data/generate_data.py
+      hash: md5
+      md5: 0b7fe84faf0f76c76d5a1eca539d1841
+      size: 32012
+    params:
+      params.yaml:
+        base.random_seed: 42
+        data.n_samples: 15000
+        data.noise_scale: 0.15
+        data.regions:
+        - Lakshadweep
+        - Gulf of Mannar
+        - Gulf of Kutch
+        - Andaman and Nicobar Islands
+    outs:
+    - path: data/raw/observations.csv
+      hash: md5
+      md5: be0baa5c1d40ac25de25ff7235467911
+      size: 2471475
+  validate:
+    cmd: .venv/bin/python -m src.data.validate
+    deps:
+    - path: data/raw/observations.csv
+      hash: md5
+      md5: be0baa5c1d40ac25de25ff7235467911
+      size: 2471475
+    - path: src/config.py
+      hash: md5
+      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
+      size: 10549
+    - path: src/data/validate.py
+      hash: md5
+      md5: 76a4f56ee76d9afdf705067b841e7541
+      size: 16978
+    outs:
+    - path: data/raw/observations_validated.csv
+      hash: md5
+      md5: be0baa5c1d40ac25de25ff7235467911
+      size: 2471475
+  preprocess:
+    cmd: .venv/bin/python -m src.data.preprocess --input 
+      data/raw/observations_validated.csv
+    deps:
+    - path: data/raw/observations_validated.csv
+      hash: md5
+      md5: be0baa5c1d40ac25de25ff7235467911
+      size: 2471475
+    - path: src/config.py
+      hash: md5
+      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
+      size: 10549
+    - path: src/data/preprocess.py
+      hash: md5
+      md5: 07a5e48953d69bafcaa35ee89cf55835
+      size: 16368
+    - path: src/features/build_features.py
+      hash: md5
+      md5: f174b25044e7da57417458a68b83e483
+      size: 13415
+    params:
+      params.yaml:
+        base.random_seed: 42
+        features:
+          numeric:
+          - depth_m
+          - water_temperature_c
+          - ph
+          - salinity_ppt
+          - dissolved_oxygen_mg_l
+          - turbidity_ntu
+          - light_intensity
+          - current_speed_m_s
+          - sonar_backscatter
+          - rugosity_index
+          - hard_substrate_percentage
+          - acoustic_complexity_index
+          - coral_cover_percentage
+          - bleaching_percentage
+          - disease_percentage
+          categorical:
+          - region
+          target_health: reef_health
+          target_restoration: restoration_suitability
+          health_classes:
+          - healthy
+          - stressed
+          - bleached
+          - severely_degraded
+          restoration_classes:
+          - suitable
+          - moderately_suitable
+          - unsuitable
+        split:
+          test_size: 0.2
+          val_size: 0.1
+          stratify: true
+    outs:
+    - path: data/processed/
+      hash: md5
+      md5: d45a0f56d0e478ba25867128a2dad359.dir
+      size: 6372537
+      nfiles: 11
+  train:
+    cmd: .venv/bin/python -m src.models.train --task all
+    deps:
+    - path: data/processed/
+      hash: md5
+      md5: d45a0f56d0e478ba25867128a2dad359.dir
+      size: 6372537
+      nfiles: 11
+    - path: src/config.py
+      hash: md5
+      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
+      size: 10549
+    - path: src/models/evaluate.py
+      hash: md5
+      md5: 42105386aea1fe9555b39bfa685bdf74
+      size: 4701
+    - path: src/models/train.py
+      hash: md5
+      md5: a0deb9cc89b209cb59c8f0299996f0c8
+      size: 28581
+    params:
+      params.yaml:
+        base.random_seed: 42
+        models.cv_folds: 5
+        models.health:
+          logistic_regression:
+            C: 1.0
+            max_iter: 1000
+            class_weight: balanced
+          random_forest:
+            n_estimators: 200
+            max_depth: 12
+            min_samples_leaf: 4
+            class_weight: balanced
+          xgboost:
+            n_estimators: 300
+            max_depth: 6
+            learning_rate: 0.05
+            subsample: 0.8
+            colsample_bytree: 0.8
+          hist_gradient_boosting:
+            max_iter: 300
+            max_depth: 6
+            learning_rate: 0.05
+        models.restoration:
+          logistic_regression:
+            C: 1.0
+            max_iter: 1000
+            class_weight: balanced
+          random_forest:
+            n_estimators: 200
+            max_depth: 12
+            min_samples_leaf: 4
+            class_weight: balanced
+          xgboost:
+            n_estimators: 300
+            max_depth: 6
+            learning_rate: 0.05
+            subsample: 0.8
+            colsample_bytree: 0.8
+          hist_gradient_boosting:
+            max_iter: 300
+            max_depth: 6
+            learning_rate: 0.05
+    outs:
+    - path: models/best_model_health.joblib
+      hash: md5
+      md5: b0cf91129f26ba2378b2a3fa5b0acdfd
+      size: 2704
+    - path: models/best_model_restoration.joblib
+      hash: md5
+      md5: b971971c63443d837f6a033a13d82630
+      size: 3269590
+    - path: models/evaluation_health.json
+      hash: md5
+      md5: 99e7f55a7ed032361e784ea02d4275d6
+      size: 9818
+    - path: models/evaluation_restoration.json
+      hash: md5
+      md5: e4d0da6e3637c7a01bf4454a365378a9
+      size: 8901
+  evaluate:
+    cmd: .venv/bin/python -m src.models.run_evaluate
+    deps:
+    - path: models/evaluation_health.json
+      hash: md5
+      md5: 99e7f55a7ed032361e784ea02d4275d6
+      size: 9818
+    - path: models/evaluation_restoration.json
+      hash: md5
+      md5: e4d0da6e3637c7a01bf4454a365378a9
+      size: 8901
+    - path: src/config.py
+      hash: md5
+      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
+      size: 10549
+    - path: src/models/run_evaluate.py
+      hash: md5
+      md5: d7482fc0a69561d31697106c5b608ae8
+      size: 2339
+    outs:
+    - path: reports/metrics.json
+      hash: md5
+      md5: e134483a7b0b32c7472122b81b603f76
+      size: 447
+  register_candidate:
+    cmd: .venv/bin/python -m src.models.run_register_candidate
+    deps:
+    - path: models/best_model_health.joblib
+      hash: md5
+      md5: b0cf91129f26ba2378b2a3fa5b0acdfd
+      size: 2704
+    - path: models/best_model_restoration.joblib
+      hash: md5
+      md5: b971971c63443d837f6a033a13d82630
+      size: 3269590
+    - path: models/evaluation_health.json
+      hash: md5
+      md5: 99e7f55a7ed032361e784ea02d4275d6
+      size: 9818
+    - path: models/evaluation_restoration.json
+      hash: md5
+      md5: e4d0da6e3637c7a01bf4454a365378a9
+      size: 8901
+    - path: reports/metrics.json
+      hash: md5
+      md5: e134483a7b0b32c7472122b81b603f76
+      size: 447
+    - path: src/config.py
+      hash: md5
+      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
+      size: 10549
+    - path: src/models/registry.py
+      hash: md5
+      md5: 9d2edc01325631028176ad00b9afd2e6
+      size: 20909
+    - path: src/models/run_register_candidate.py
+      hash: md5
+      md5: 18184acf0e3b029bd150e5053ca6790e
+      size: 2128
+    outs:
+    - path: reports/candidate_registration.json
+      hash: md5
+      md5: 24d59c552b5f34dd37098e9793e63d3a
+      size: 485

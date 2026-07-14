@@ -1,0 +1,16 @@
+# Add patterns of files dvc should ignore, which could improve
+# the performance. Learn more at
+# https://dvc.org/doc/user-guide/dvcignore
+
+# MLflow tracking database and artifact directories.
+# Managed exclusively by MLflow; declaring them as DVC outputs would
+# cause unnecessary pipeline invalidation on every run.
+artifacts/mlruns.db
+mlruns/
+mlartifacts/
+
+# Root-level stale MLflow database (empty; not the canonical database).
+mlflow.db
+
+# Virtual environment
+.venv/

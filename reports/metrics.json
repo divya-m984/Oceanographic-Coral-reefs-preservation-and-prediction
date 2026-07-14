@@ -1,0 +1,18 @@
+{
+  "health": {
+    "best_algorithm": "logistic_regression",
+    "cv_macro_f1": 0.761172,
+    "cv_balanced_accuracy": 0.777646,
+    "test_macro_f1": 0.7871,
+    "test_balanced_accuracy": 0.8012,
+    "test_accuracy": 0.8193
+  },
+  "restoration": {
+    "best_algorithm": "xgboost",
+    "cv_macro_f1": 0.791291,
+    "cv_balanced_accuracy": 0.801557,
+    "test_macro_f1": 0.8029,
+    "test_balanced_accuracy": 0.8121,
+    "test_accuracy": 0.8277
+  }
+}
