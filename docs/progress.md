@@ -361,6 +361,117 @@ New test file: `tests/test_dvc_pipeline.py` (26 tests):
 
 ---
 
+---
+
+### M8 — GitHub Actions CI/CD Foundation
+
+#### Files created or modified
+
+| File | Action |
+|---|---|
+| `.github/workflows/ci.yml` | Replaced scaffold with full 5-job workflow |
+| `scripts/ci_smoke_test.py` | New — quick ML training smoke test (CI-safe) |
+| `scripts/ci_validate_pipeline.py` | New — DVC YAML check + isolated data round-trip |
+| `scripts/ci_check.sh` | New — local equivalent of CI |
+| `tests/test_ci_workflow.py` | New — 26 structural tests for the workflow YAML |
+| `tests/test_dvc_pipeline.py` | Fixed pre-existing ruff lint issues (F401, I001) |
+| `tests/test_predict.py` | Fixed pre-existing ruff lint issue (I001) |
+| `README.md` | Added CI Status section |
+| `docs/progress.md` | Added M8 section (this document) |
+
+#### Workflow triggers
+
+- `push` → `master` or `main`
+- `pull_request` → `master` or `main`
+- `workflow_dispatch` (manual)
+
+#### Jobs and dependencies
+
+```
+code-quality
+├── tests ──────────────────────────────┐
+├── pipeline-validation                  ├── build
+└── ml-smoke-test ───────────────────────┘
+```
+
+| Job | Description | Timeout |
+|---|---|---|
+| code-quality | ruff check + ruff format --check | 10 min |
+| tests | Full 415-test suite | 30 min |
+| pipeline-validation | dvc dag + DVC structure tests + data round-trip | 10 min |
+| ml-smoke-test | Quick ML training, prediction checks | 15 min |
+| build | python -m build; uploads dist/ | 10 min |
+
+#### Python version
+
+Python **3.12** in CI. Project requires `>=3.11`; tested locally on 3.14.6.
+
+#### Caching strategy
+
+`actions/setup-python@v5` with `cache: pip` and `cache-dependency-path: requirements.txt`.
+Subsequent runs on unchanged dependencies skip re-downloading (~3 GB of packages).
+
+#### CI-safe MLflow strategy
+
+- `MLFLOW_TRACKING_URI=sqlite:///ci_mlruns.db` set in the `tests` job env.
+- `scripts/ci_smoke_test.py` creates its own `sqlite:///tmp.../mlruns.db` per run.
+- Canonical `artifacts/mlruns.db` is never opened in CI.
+- No model is registered or promoted in CI.
+
+#### CI-safe dataset strategy
+
+- No DVC remote is configured; `dvc pull` is not used.
+- `scripts/ci_validate_pipeline.py` generates 400 isolated synthetic rows.
+- `scripts/ci_smoke_test.py` generates 500 isolated synthetic rows.
+- Real `data/raw/` and `data/processed/` are never read or written in CI.
+
+#### Security restrictions
+
+- `permissions: contents: read` (no write access to repository).
+- No repository secrets required.
+- No hardcoded absolute paths (`/home/BAAHbun` etc.).
+- `--promote` flag never used.
+- `dvc repro` never run (avoids `register_candidate` side effect).
+- Build artifact contains only the Python package (`dist/`), not datasets or models.
+
+#### Local equivalent command
+
+```bash
+bash scripts/ci_check.sh
+```
+
+#### YAML validation
+
+Validated with `yaml.safe_load` in `tests/test_ci_workflow.py` (26 tests, all pass).
+
+#### Test results
+
+```
+415 passed, 97 warnings in 284s
+  (389 original tests + 26 new CI workflow tests)
+```
+
+New test file: `tests/test_ci_workflow.py` (26 tests):
+- `TestWorkflowFile` — 3 tests: file exists, valid YAML, has name
+- `TestTriggers` — 4 tests: push/PR/dispatch triggers, branch targets
+- `TestPermissions` — 3 tests: permissions block, contents:read, no write
+- `TestConcurrency` — 3 tests: cancel-in-progress, group includes workflow+ref
+- `TestJobs` — 5 tests: required jobs, timeouts, build dependencies
+- `TestSecurity` — 4 tests: no /home/ paths, no --promote, no dvc repro, no canonical DB
+- `TestActions` — 4 tests: pinned checkout@v4, setup-python@v5, upload-artifact@v4, pip cache
+
+#### Dataset integrity
+
+`data/raw/observations.csv`: 15,000 rows confirmed (15,001 lines with header).
+
+#### Model registry integrity
+
+- `coralsense_reef_health` v1: champion alias unchanged.
+- `coralsense_restoration_suitability` v1: champion alias unchanged.
+- Candidate versions 2, 3, 4 from M7 remain; no new versions registered during M8.
+
+---
+
 ## Current Limitations
 
 - MLflow file store (`mlruns/`) is in maintenance mode as of MLflow 3.14.0; all tracking uses the SQLite backend.
@@ -368,13 +479,15 @@ New test file: `tests/test_dvc_pipeline.py` (26 tests):
 - Quality gate thresholds are conservative; small-dataset test fixtures may not naturally pass them.
 - `register_candidate` always re-runs because its output (`candidate_registration.json`, `cache: false`) cannot be restored from DVC cache. This is acceptable since registration is a side-effect on the MLflow DB, not a pure function of local files.
 - `mlflow.db` at project root is unused — not deleted to avoid unintended changes.
+- No DVC remote configured; CI uses isolated temp data instead of `dvc pull`.
+- Python 3.14 is not yet officially supported by GitHub Actions; CI uses Python 3.12.
 - No FastAPI serving, Streamlit UI, drift monitoring, or Docker deployment yet.
 
 ---
 
-## Planned Next Steps (M8+)
+## Planned Next Steps (M9+)
 
-- M8: GitHub Actions CI/CD pipeline (`.github/workflows/` already scaffolded)
-- M8: FastAPI inference endpoint (`src/api/`)
-- M8: Evidently AI drift monitoring (`src/monitoring/`)
-- M8: Docker containerisation (`docker-compose.yml` already scaffolded)
+- M9: FastAPI inference endpoint (`src/api/main.py`, `src/api/schemas.py`)
+- M10: Streamlit dashboard (`src/dashboard/app.py`)
+- M11: Evidently AI drift monitoring (`src/monitoring/drift.py`)
+- M12: Docker containerisation and `docker compose up --build`

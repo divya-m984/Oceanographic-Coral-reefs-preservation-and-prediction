@@ -1,43 +1,208 @@
-# .github/workflows/ci.yml — CoralSense CI pipeline.
-# Runs on every push and pull request to main.
-# Full job definitions expanded in M12; structure defined here.
+# .github/workflows/ci.yml — CoralSense MLOps CI pipeline (M8)
+#
+# Triggers: push / PR to master or main, manual workflow_dispatch.
+#
+# Jobs
+# ----
+# code-quality         Lint and format check (ruff).
+# tests                Full pytest suite with a CI-safe temporary MLflow DB.
+# pipeline-validation  DVC DAG check, pipeline structure tests, isolated data round-trip.
+# ml-smoke-test        Quick ML training on temp data; verifies predictions and metrics.
+# build                Python package build; uploads dist/ artifact.
+#
+# Safety constraints
+# ------------------
+# - Minimal token: contents: read only.
+# - No secrets required.
+# - MLFLOW_TRACKING_URI points to a disposable CI file; canonical artifacts/mlruns.db
+#   is never touched.
+# - register_candidate stage is NOT run; no model is promoted.
+# - No hardcoded local paths (/home/BAAHbun or equivalent).
+# - Concurrency cancellation prevents stacked runs on the same branch.
+# - Full 10-minute DVC pipeline is NOT run on every push.
+#
+# Local equivalent
+# ----------------
+#   bash scripts/ci_check.sh
+#
+# Limitations
+# -----------
+# - No DVC remote is configured; pipeline-validation uses isolated temp data
+#   rather than pulling DVC-tracked datasets.
+# - Python 3.12 is used in CI (project requires >=3.11, tested locally on 3.14.6).
 
 name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [master, main]
   pull_request:
-    branches: [main, master]
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ---------------------------------------------------------------------------
+# Shared install step used in multiple jobs
+# ---------------------------------------------------------------------------
+# (GitHub Actions does not support YAML anchors, so each job repeats the
+#  install steps. The pip cache makes subsequent installs fast.)
 
 jobs:
-  lint-and-test:
-    name: Lint + Test (Python ${{ matrix.python-version }})
+
+  # ── Job 1: Code quality ──────────────────────────────────────────────────
+  code-quality:
+    name: Code Quality
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Install dev dependencies
+      - name: Install ruff
+        run: pip install "ruff>=0.11"
+
+      - name: Lint (ruff check)
+        run: ruff check src/ tests/ scripts/
+
+      - name: Format check (ruff format --check)
+        run: ruff format --check src/ tests/ scripts/
+
+  # ── Job 2: Full test suite ───────────────────────────────────────────────
+  tests:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: code-quality
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -e .
 
-      - name: Lint with ruff
-        run: |
-          ruff check src/ tests/
-          ruff format --check src/ tests/
+      - name: Run test suite
+        run: python -m pytest tests/ -q --tb=short --junit-xml=reports/junit.xml
+        env:
+          # Point MLflow at a disposable CI file; never touches artifacts/mlruns.db.
+          MLFLOW_TRACKING_URI: "sqlite:///ci_mlruns.db"
 
-      - name: Run tests
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: reports/junit.xml
+          retention-days: 7
+
+  # ── Job 3: DVC pipeline validation ──────────────────────────────────────
+  pipeline-validation:
+    name: Pipeline Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: code-quality
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
         run: |
-          pytest --tb=short -q
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Show DVC pipeline DAG
+        # dvc dag reads dvc.yaml only; no data files required.
+        run: dvc dag
+
+      - name: Validate pipeline structure and run isolated data round-trip
+        # Checks dvc.yaml for absolute paths, generates temp data, validates,
+        # and preprocesses it — without touching real project files.
+        run: python scripts/ci_validate_pipeline.py
+
+      - name: DVC pipeline structure tests (pytest)
+        run: python -m pytest tests/test_dvc_pipeline.py -q --tb=short
+
+  # ── Job 4: ML smoke test ─────────────────────────────────────────────────
+  ml-smoke-test:
+    name: ML Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: code-quality
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run ML smoke test
+        # Trains lightweight health + restoration candidates on 500 synthetic rows,
+        # verifies predictions, probability sums, and required metrics.
+        # Uses a temporary MLflow DB; never registers to the canonical registry.
+        run: python scripts/ci_smoke_test.py
+
+  # ── Job 5: Package build ─────────────────────────────────────────────────
+  build:
+    name: Package Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [tests, ml-smoke-test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build package (wheel + sdist)
+        run: python -m build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          # Safe: contains only the Python package, not datasets or model files.
+          retention-days: 7
