@@ -1,0 +1,74 @@
+# .dockerignore — Files excluded from the Docker build context.
+#
+# Goal: keep build context small, safe, and free of secrets.
+
+# Version control
+.git/
+.gitignore
+.dvc/
+.dvcignore
+
+# Virtual environments (dependencies are installed inside the image)
+.venv/
+venv/
+env/
+
+# Secrets and local config
+.env
+!.env.example
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Test caches and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# MLflow runtime files (NOT the canonical DB which is needed by Dockerfile.mlflow)
+mlartifacts/
+mlflow.db
+
+# DVC cache (large, not needed in containers)
+.dvc/cache/
+.dvc/tmp/
+
+# Local editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Notebooks (not needed in serving images)
+notebooks/
+
+# Documentation build artefacts
+docs/
+
+# Raw / processed data (large, mounted as volumes or not needed in API image)
+data/raw/
+data/processed/
+data/reference/
+data/production/
+
+# Log files
+*.log
+logs/
+
+# Claude / AI assistant files
+.claude/
+
+# CI temp artefacts
+ci_mlruns.db
+ci_check_mlruns.db
+
+# Coralsense egg-info
+coralsense_mlops.egg-info/

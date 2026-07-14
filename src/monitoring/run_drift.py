@@ -147,10 +147,22 @@ def run_drift(
 
     # 2. Load inference pipelines (real or injected)
     if pipeline_factory is None:
-        from src.models.predict import InferencePipeline
+        import os
 
-        def pipeline_factory(task: str) -> Any:  # noqa: F811
-            return InferencePipeline(task=task, cfg=cfg)
+        mode = os.getenv("CORALSENSE_MODEL_MODE", "registry").lower()
+        if mode == "bundle":
+            from src.api.bundle_loader import BundleInferencePipeline
+            from src.api.model_loader import _get_bundle_dir
+
+            _bundle_dir = _get_bundle_dir()
+
+            def pipeline_factory(task: str) -> Any:  # noqa: F811
+                return BundleInferencePipeline(task=task, bundle_dir=_bundle_dir)
+        else:
+            from src.models.predict import InferencePipeline
+
+            def pipeline_factory(task: str) -> Any:  # noqa: F811
+                return InferencePipeline(task=task, cfg=cfg)
 
     # Numeric feature columns for drift analysis
     numeric_cols = cfg.numeric_features

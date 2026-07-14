@@ -590,7 +590,7 @@ New test file: `tests/test_api.py` (83 tests across 10 classes):
 - No DVC remote configured; CI uses isolated temp data instead of `dvc pull`.
 - Python 3.14 is not yet officially supported by GitHub Actions; CI uses Python 3.12.
 - Streamlit dashboard requires local FastAPI server; configure `CORALSENSE_API_URL` for remote.
-- Drift monitoring and Docker deployment not yet implemented.
+- Drift container must run as host UID/GID (`HOST_UID`/`HOST_GID`) to write bind-mounted `./reports`.
 
 ---
 
@@ -701,7 +701,170 @@ New test classes (131 tests):
 
 ---
 
-## Planned Next Steps (M11+)
+## M11 — Evidently Drift Monitoring
 
-- M11: Evidently AI drift monitoring (`src/monitoring/drift.py`)
-- M12: Docker containerisation and `docker compose up --build`
+**Status:** Complete (commit 8b10355)
+
+**What was built:**
+- `src/monitoring/generate_production.py`: synthetic reference/production window generation with configurable shift scale
+- `src/monitoring/drift.py`: `DriftDetector` — Evidently feature drift, chi2 prediction drift, KS confidence drift
+- `src/monitoring/run_drift.py`: CLI (`--shift-scale`, `--no-html`) → `reports/drift_summary.json`
+- `src/dashboard/pages/8_Drift_Monitoring.py`: dashboard page 8 visualising drift results
+- DVC `run_drift` stage added as 7th pipeline stage
+- 68 tests (`tests/test_monitoring.py`)
+
+**Key design decisions:**
+- `chi2_contingency` (not `chisquare`) avoids floating-point sum-matching tolerance errors
+- Zero shift → 0 drifted columns; standard shift (scale=1.0) → 4 drifted → RETRAIN recommended
+
+---
+
+## M12 — Docker Containerisation
+
+**Status:** Complete
+
+**What was built:**
+
+### Docker images
+- `Dockerfile.api` — Multi-stage, bundle mode (`CORALSENSE_MODEL_MODE=bundle`), non-root user, health check on `/health`
+- `Dockerfile.dashboard` — Multi-stage, connects to API container, non-root user, health check on `/_stcore/health`
+- `Dockerfile.mlflow` — Single-stage, `docker/init_mlflow.sh` as ENTRYPOINT, non-root user, health check on port 5000
+
+### Init scripts
+- `docker/init_mlflow.sh` — Copies canonical DB to writable volume, auto-detects and rewrites host-absolute paths without any hardcoded prefix, then starts `mlflow server`
+- `docker/init_drift.sh` — One-shot drift report via `python -m src.monitoring.run_drift`
+
+### Deployment bundle
+- `scripts/export_champions.py` — Exports champion joblib artefacts to `deploy/bundles/` with SHA-256 checksums and metadata
+- `scripts/verify_deployment_bundle.py` — 11 checks: files, checksums, model names, alias, preprocessor fitted, test prediction, proba sum
+- `src/api/bundle_loader.py` — `BundleInferencePipeline`: same interface as `InferencePipeline`, no MLflow dependency
+
+### Compose orchestration
+- `docker-compose.yml` — 4 services: `mlflow` (5000), `api` (8000), `dashboard` (8501), `drift` (profile: drift)
+- `artifacts/mlruns.db` mounted `:ro` in mlflow service — canonical DB is never modified
+- API does not depend on mlflow at startup (bundle mode)
+- Named volumes: `mlflow-runtime` (runtime DB copy)
+- `./reports` is a bind mount shared between drift (write) and dashboard (read)
+- Drift container runs as `HOST_UID:HOST_GID` to write bind-mounted host directories
+- Ports configurable via env vars (`MLFLOW_PORT`, `API_PORT`, `DASHBOARD_PORT`)
+
+### Dependency architecture
+- API/drift image: `plotly>=5.10,<6` (evidently 0.7 constraint); evidently included
+- Dashboard image: evidently excluded (reads JSON only, never imports evidently); `plotly>=6.0` kept
+- `pandas>=2.0` (MLflow 3.14.0 metadata says `<3`; 2.x satisfies runtime and is compatible)
+
+### Safety guarantees
+- No hardcoded host-absolute paths (`/home/`, `/Users/`) anywhere in Docker files
+- No `--promote` flag in any container
+- No `fit` or `fit_transform` called in any init script or bundle loader
+- SHA-256 checksums verified on bundle load before first prediction
+
+### Tests
+- `tests/test_docker.py` (82 tests) — structural and safety checks on all Docker files, compose, and init scripts
+- `tests/test_bundle.py` (52 tests) — bundle export, `BundleInferencePipeline`, `ModelLoader` dual-mode, `verify_bundle`
+
+### Runtime verification results
+
+**Environment:** Docker 29.6.1 / Compose 5.3.0 (daemon available)
+
+**Data integrity (pre/post-shutdown checksums — identical):**
+- `data/raw/observations.csv`: `a03cb3e9…` (unchanged)
+- `artifacts/mlruns.db`: `b76a4015…` (unchanged — never modified)
+
+**Bundle export (`python scripts/export_champions.py`):**
+- health: logistic_regression, v1, champion alias
+- restoration: xgboost, v1, champion alias
+- All 11 verification checks passed (`python scripts/verify_deployment_bundle.py`)
+
+**Image build (`docker compose build`):**
+- `coralsense-api`: 892 MB
+- `coralsense-dashboard`: 845 MB
+- `coralsense-mlflow`: 284 MB
+
+**Stack health (after `docker compose up -d`):**
+- `coralsense-mlflow` → healthy
+- `coralsense-api` → healthy
+- `coralsense-dashboard` → healthy
+
+**Endpoint verification:**
+```
+GET  /health      → 200 {"status":"ok","health_model_ready":true,"restoration_model_ready":true}
+GET  /model-info  → health v1 champion, restoration v1 champion
+GET  /_stcore/health (dashboard) → 200
+GET  http://localhost:5000/  (MLflow UI) → 200
+```
+
+**POST /predict/both (Gulf of Mannar observation):**
+```json
+{
+  "health":      {"predicted_class": "healthy",  "confidence": 0.9847},
+  "restoration": {"predicted_class": "suitable", "confidence": 0.9919}
+}
+```
+
+**Drift service (`docker compose --profile drift run --rm drift`):**
+- 4 features drifted (water_temperature_c, bleaching_percentage, coral_cover_percentage, turbidity_ntu)
+- Recommendation: RETRAIN
+- `reports/drift_summary.json` written
+
+**Registry state after full stack run:** unchanged
+- `coralsense_reef_health`: v1–v4, champion alias → v1
+- `coralsense_restoration_suitability`: v1–v4, champion alias → v1
+
+**Post-shutdown:** zero containers running; canonical DB checksum unchanged.
+
+**7 fixes applied during verification:**
+1. `requirements.txt`: `pandas>=3.0` → `pandas>=2.0` (mlflow metadata conflict in Python 3.12)
+2. `requirements.txt`: `evidently>=0.4` → `evidently>=0.7` (old version lacks `Report` class)
+3. `Dockerfile.api`: filter `plotly>=6` → `plotly>=5.10,<6` (evidently 0.7 constraint)
+4. `Dockerfile.dashboard`: drop evidently (dashboard reads JSON only)
+5. `Dockerfile.mlflow`: pre-create `/mlflow-runtime` with `coralsense` ownership (before `USER` switch); remove `VOLUME` declaration — fixes permission denied on named volume
+6. `docker-compose.yml`: `reports` named volume → bind mount `./reports`; add `user: HOST_UID:HOST_GID` to drift service
+7. `src/monitoring/run_drift.py`: check `CORALSENSE_MODEL_MODE` env var → use `BundleInferencePipeline` when mode=bundle (avoids MLflow access in container)
+
+**Test suite:**
+```bash
+pytest tests/test_docker.py tests/test_bundle.py -q
+# 134 passed
+
+pytest tests/ -q
+# 840 passed
+```
+
+**Linting:**
+```bash
+ruff check .         # no issues
+ruff format --check  # no issues
+git diff --check     # no trailing whitespace
+```
+
+### Quick start
+```bash
+# 1. Export champions (once, after DVC pipeline)
+python scripts/export_champions.py
+python scripts/verify_deployment_bundle.py
+
+# 2. Build and start
+docker compose up --build -d
+
+# 3. Services
+#   MLflow UI:  http://localhost:5000
+#   API docs:   http://localhost:8000/docs
+#   Dashboard:  http://localhost:8501
+
+# 4. Optional drift report
+export HOST_UID=$(id -u) HOST_GID=$(id -g)
+docker compose --profile drift run --rm drift
+
+# 5. Teardown (keep named volumes)
+docker compose down
+
+# 6. Full teardown including volumes
+docker compose down -v
+```
+
+---
+
+## Planned Next Steps
+
+- All milestones M1–M12 complete.

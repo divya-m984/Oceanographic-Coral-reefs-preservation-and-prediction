@@ -381,6 +381,16 @@ pytest -m "not slow"
 
 ## Docker
 
+**Prerequisites (run once after `dvc repro`):**
+
+```bash
+# Export champion models to a portable deployment bundle
+python scripts/export_champions.py
+
+# Verify bundle integrity (11 checks)
+python scripts/verify_deployment_bundle.py
+```
+
 ```bash
 # Build and start all services
 docker compose up --build -d
