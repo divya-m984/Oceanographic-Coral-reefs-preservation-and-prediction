@@ -589,12 +589,119 @@ New test file: `tests/test_api.py` (83 tests across 10 classes):
 - `mlflow.db` at project root is unused — not deleted to avoid unintended changes.
 - No DVC remote configured; CI uses isolated temp data instead of `dvc pull`.
 - Python 3.14 is not yet officially supported by GitHub Actions; CI uses Python 3.12.
-- Streamlit UI, drift monitoring, and Docker deployment not yet implemented.
+- Streamlit dashboard requires local FastAPI server; configure `CORALSENSE_API_URL` for remote.
+- Drift monitoring and Docker deployment not yet implemented.
 
 ---
 
-## Planned Next Steps (M10+)
+---
 
-- M10: Streamlit dashboard (`src/dashboard/app.py`)
+### M10 — Streamlit Dashboard
+
+#### Files created
+
+| File | Description |
+|---|---|
+| `.streamlit/config.toml` | Dark theme (ocean navy / teal / cyan) |
+| `src/dashboard/api_client.py` | HTTP client for FastAPI — GET /health, GET /model-info, POST /predict/both |
+| `src/dashboard/data_loader.py` | Read-only cached CSV + evaluation JSON loading |
+| `src/dashboard/components.py` | Colour maps, disclaimer, sidebar, prediction renderer, payload builder |
+| `src/dashboard/app.py` | Home page: project overview, metrics, champion model cards, pipeline status |
+| `src/dashboard/pages/1_Overview.py` | Detailed project objective, sonar vs environmental feature distinction |
+| `src/dashboard/pages/2_Reef_Map.py` | Interactive Plotly OpenStreetMap scatter map (no API key) with filters |
+| `src/dashboard/pages/3_Habitat_Health.py` | Health class distribution, box/violin plots, region × health breakdown |
+| `src/dashboard/pages/4_Restoration_Planning.py` | Suitability distribution, feature comparisons, top suitable observations |
+| `src/dashboard/pages/5_Predict.py` | Sensor input form → POST /predict/both → dual prediction display |
+| `src/dashboard/pages/6_Model_Performance.py` | Algorithm comparison, CV F1 bar charts, per-class metrics from eval JSONs |
+| `src/dashboard/pages/7_MLOps_Status.py` | Pipeline milestone status table + live champion metadata from API |
+| `tests/test_dashboard.py` | 131 tests: API client, data loader, components, safety, AppTest smoke tests |
+
+#### Architecture
+
+- `api_client.py` uses `requests` (synchronous) for all FastAPI calls — no model imports.
+- `data_loader.py` uses `@st.cache_data` for read-only cached access to CSV and eval JSONs.
+- `components.py` provides shared colour maps, sidebar, disclaimer, and prediction rendering.
+- Each page imports from `components.py` and calls `render_sidebar()` for consistent navigation.
+- Predictions always call `build_predict_payload()` which explicitly excludes target labels.
+- `APIError` is always caught and displayed as a user-friendly message — no raw tracebacks.
+
+#### Key design decisions
+
+- **No model loading in dashboard**: `api_client.py` never imports `src.models.*`, `mlflow`, or `joblib`.
+- **Read-only data access**: only CSV and evaluation JSON files are read; no file is written.
+- **Graceful degradation**: API offline → sidebar shows "API offline"; missing eval files → page warns, doesn't crash.
+- **Map performance**: `sample_for_display(df, max_n=2000)` limits rendered map points; adjustable via slider.
+- **Prediction button**: form uses `st.form` + `st.form_submit_button` — no auto-predict on widget change.
+- **Test isolation**: `AppTest.from_file()` with mocked `src.dashboard.api_client.APIClient` and patched `data_loader` paths.
+
+#### Launch commands (two terminals)
+
+```bash
+# Terminal 1 — FastAPI inference server
+source .venv/bin/activate
+uvicorn src.api.main:app --host 127.0.0.1 --port 8000
+
+# Terminal 2 — Streamlit dashboard
+source .venv/bin/activate
+streamlit run src/dashboard/app.py
+```
+
+URLs:
+- API docs: http://127.0.0.1:8000/docs
+- Dashboard: http://localhost:8501
+
+#### Integration test results
+
+```
+FastAPI GET /health → status: ok, both models ready
+FastAPI GET /model-info → health alias: champion v1, restoration alias: champion v1
+Streamlit HTTP 200 at http://127.0.0.1:8501/
+POST /predict/both (Gulf of Mannar) → health: healthy (0.985), restoration: suitable (0.992)
+```
+
+#### Test suite
+
+```bash
+pytest tests/test_dashboard.py -q
+# 131 passed in 4.1s
+
+pytest tests/ -q
+# 629 passed in 331s  (498 previous + 131 new dashboard tests)
+```
+
+New test classes (131 tests):
+- `TestAPIClientHealth` — 5 tests: success, connection error, timeout, HTTP error, malformed response
+- `TestAPIClientModelInfo` — 2 tests: success, connection error
+- `TestAPIClientPredictBoth` — 5 tests: success, timeout, connection error, HTTP error, malformed
+- `TestAPIClientEnvConfig` — 3 tests: base URL from env, default URL, timeout from env
+- `TestLoadObservations` — 3 tests: success, missing file, missing columns
+- `TestLoadEvaluation` — 3 tests: health success, restoration success, missing file returns None
+- `TestSampleForDisplay` — 4 tests: bounded, small df, no mutation, reproducible
+- `TestColorMaps` — 6 tests: coverage, hex format, semantic green/red checks
+- `TestDisclaimer` — 3 tests: content checks
+- `TestBuildPredictPayload` — 4 tests: target label exclusion, feature retention
+- `TestProbabilityIntegrity` — 5 tests: sums to 1, class coverage, confidence matches
+- `TestFilterLogic` — 4 tests: region filtering
+- `TestModelPerformanceLoading` — 4 tests: JSON structure and metric ranges
+- `TestFormPayloadConstruction` — 4 tests: full payload with target exclusion
+- `TestNoForbiddenImports` — parametrized × dashboard files: no train, registry, mlflow, hardcoded paths, canonical DB
+- `TestDisclaimerPresence` — parametrized × page files: synthetic reference check
+- `TestModuleImportability` — 4 tests: api_client, data_loader, components, __init__
+- `TestAppSmoke` — 5 AppTest smoke tests with mocked dependencies
+
+#### Dataset integrity
+
+`data/raw/observations.csv`: 15,001 lines (15,000 rows + header). Unchanged.
+
+#### Registry integrity after M10
+
+- `coralsense_reef_health` v1: champion alias unchanged.
+- `coralsense_restoration_suitability` v1: champion alias unchanged.
+- No new model versions registered (dashboard is fully read-only).
+
+---
+
+## Planned Next Steps (M11+)
+
 - M11: Evidently AI drift monitoring (`src/monitoring/drift.py`)
 - M12: Docker containerisation and `docker compose up --build`

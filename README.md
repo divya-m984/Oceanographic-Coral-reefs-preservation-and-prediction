@@ -344,8 +344,11 @@ bash scripts/ci_check.sh
 # M9 — Start the FastAPI inference server
 uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 
-# M10 — Start the Streamlit dashboard
-streamlit run src/dashboard/app.py --server.port 8501
+# M10 — Start the Streamlit dashboard (requires FastAPI running first)
+# Terminal 1:
+uvicorn src.api.main:app --host 127.0.0.1 --port 8000
+# Terminal 2:
+streamlit run src/dashboard/app.py
 
 # M11 — Generate Evidently drift report
 python -m src.monitoring.drift
