@@ -24,8 +24,9 @@
 9. [Milestone Commands](#milestone-commands)
 10. [Running Tests](#running-tests)
 11. [Docker](#docker)
-12. [Project Structure](#project-structure)
-13. [Scientific Assumptions](#scientific-assumptions)
+12. [M13 — Controlled Retraining and Model Governance](#m13--controlled-retraining-and-model-governance)
+13. [Project Structure](#project-structure)
+14. [Scientific Assumptions](#scientific-assumptions)
 
 ---
 
@@ -359,6 +360,43 @@ python -m src.monitoring.run_drift --shift-scale 2  # stronger simulated degrada
 
 # M12 — Start all services via Docker Compose
 docker compose up --build
+
+# M13 — Controlled retraining (run drift first to get a recommendation)
+python -m src.monitoring.run_drift --no-html        # produces reports/drift_summary.json
+
+# Dry-run: validate labelled input and check retraining permission (no DB writes)
+python scripts/run_retraining.py \
+  --task health \
+  --input data/raw/observations.csv \
+  --drift-summary reports/drift_summary.json \
+  --dry-run
+
+# Full retrain + compare (registers challenger, writes comparison report; never promotes)
+python scripts/run_retraining.py \
+  --task health \
+  --input data/raw/observations.csv \
+  --drift-summary reports/drift_summary.json
+
+# Promote challenger (requires explicit --approve, --approver, --reason)
+python -m src.models.promote \
+  --model coralsense_reef_health \
+  --challenger-version <VERSION> \
+  --approve \
+  --approver "Your Name" \
+  --reason "Challenger improves macro-F1 by 3 pp over champion"
+
+# Rollback (--dry-run to preview, then run without it)
+python -m src.models.rollback \
+  --model coralsense_reef_health \
+  --target-version 1 \
+  --approver "Your Name" \
+  --reason "Challenger underperforms on held-out reef transects" \
+  --dry-run
+
+# Generate a Markdown model card for any registered version
+python -m src.models.model_card \
+  --model coralsense_reef_health \
+  --version 1
 ```
 
 ---
@@ -415,6 +453,155 @@ Services after startup:
 
 ---
 
+## M13 — Controlled Retraining and Model Governance
+
+### Why unlabelled drift data cannot be used for retraining
+
+The M11 Evidently drift pipeline generates a **shifted, unlabelled production window**
+(`data/production/`) to simulate data drift. This window contains sensor observations
+without ground-truth reef-health or restoration-suitability labels.
+
+Supervised learning requires labelled examples. Using unlabelled drift data for retraining
+would be scientifically invalid — there are no labels to learn from. The drift window's
+only role is to signal **when** retraining is warranted, not to supply training data.
+
+### Labelled-data contract
+
+`scripts/run_retraining.py` and `src/models/retrain.py` enforce the following rules before
+any model is trained:
+
+| Requirement | Detail |
+|---|---|
+| Both target columns present | `reef_health` (health task) and/or `restoration_suitability` (restoration task) must be non-null |
+| No NaN targets | Rows with missing labels are rejected outright |
+| Minimum row count | At least 200 labelled rows required (configurable in `params.yaml`) |
+| All classes present | All label classes must appear in the input (health: 4 classes, restoration: 3 classes) |
+| Minimum class count | Each class must have at least 5 examples |
+| Valid feature columns | Input must contain the expected sensor feature columns |
+| SHA-256 provenance | Input file hash is recorded in MLflow tags for audit purposes |
+| Retraining permission | Drift summary must recommend RETRAIN **or** a manual reason must be supplied |
+
+Attempting to pass the M11 production window (missing target columns) as retraining input
+raises a `ValueError` and exits with code 1.
+
+### Dry-run mode
+
+Pass `--dry-run` to validate the input and permission check without writing anything to
+the MLflow registry or filesystem:
+
+```bash
+python scripts/run_retraining.py \
+  --task health \
+  --input data/raw/observations.csv \
+  --drift-summary reports/drift_summary.json \
+  --dry-run
+```
+
+Exit codes: `0` = validation passed, `1` = validation error, `3` = permission denied.
+
+### Challenger training
+
+When run without `--dry-run`, the orchestrator:
+
+1. Validates the labelled input (8 checks above).
+2. Verifies retraining permission from the drift summary.
+3. Fits a fresh preprocessor on the **training split only** (no leakage from holdout).
+4. Trains all three algorithm variants (Logistic Regression, Random Forest, XGBoost)
+   using the same hyperparameter grid as M5.
+5. Selects the best challenger by CV macro-F1.
+6. Evaluates the challenger on the holdout split.
+7. Registers the challenger in MLflow **without** setting the `champion` alias.
+8. Immediately runs champion-challenger comparison and writes a JSON report.
+
+The champion alias is **never moved** by the retraining script.
+
+### Comparison outcomes
+
+`src/models/compare.py` applies four gates (thresholds configurable in `params.yaml`
+under `retraining.comparison`):
+
+| Outcome | Meaning |
+|---|---|
+| `eligible_for_promotion` | Challenger passes all gates; human may promote |
+| `review_required` | Challenger meets minimum quality but does not clearly beat the champion |
+| `reject` | Challenger regresses on macro-F1, balanced accuracy, or per-class recall |
+
+The comparison outcome is printed to stdout and saved to
+`reports/comparison_<model>_<timestamp>.json`. **Promotion is never triggered
+automatically**, regardless of outcome.
+
+### Explicit promotion
+
+Promotion requires three mandatory arguments and is blocked unless the comparison
+outcome is `eligible_for_promotion` (or `--force` is passed for `review_required` cases):
+
+```bash
+python -m src.models.promote \
+  --model coralsense_reef_health \
+  --challenger-version <VERSION> \
+  --approve \
+  --approver "Your Name" \
+  --reason "Challenger improves macro-F1 by 3 pp and passes all quality gates"
+```
+
+Omitting `--approve`, `--approver`, or `--reason` raises an error. A promotion receipt
+(`reports/promotion_receipt_<timestamp>.json`) is written on success.
+
+### Rollback
+
+Rolling back moves the `champion` alias to a previous version without deleting any
+model version:
+
+```bash
+# Preview what would happen
+python -m src.models.rollback \
+  --model coralsense_reef_health \
+  --target-version 1 \
+  --approver "Your Name" \
+  --reason "Challenger underperforms on held-out reef transects" \
+  --dry-run
+
+# Execute rollback
+python -m src.models.rollback \
+  --model coralsense_reef_health \
+  --target-version 1 \
+  --approver "Your Name" \
+  --reason "Challenger underperforms on held-out reef transects"
+```
+
+A rollback receipt (`reports/rollback_receipt_<timestamp>.json`) is written on success.
+
+### Model cards
+
+Generate a Markdown model card for any registered version:
+
+```bash
+python -m src.models.model_card \
+  --model coralsense_reef_health \
+  --version 1
+# Saved to reports/model_cards/coralsense_reef_health_v1.md
+```
+
+### Approval requirements summary
+
+| Action | Required flags |
+|---|---|
+| Retrain + compare | `--task`, `--input` (drift summary or `--reason`) |
+| Dry-run only | add `--dry-run` |
+| Promote challenger | `--approve`, `--approver`, `--reason` |
+| Force-promote `review_required` | add `--force` |
+| Rollback | `--target-version`, `--approver`, `--reason` |
+
+### Synthetic-data limitation
+
+All metrics reported in comparison reports, promotion receipts, and model cards reflect
+performance on the CoralSense **synthetic** dataset. They do not indicate real-world
+coral reef prediction accuracy. Replace `src/data/generate_data.py` with a real sensor
+ingestion module and supply genuinely labelled field data before drawing any ecological
+conclusions.
+
+---
+
 ## Project Structure
 
 ```
@@ -436,7 +623,13 @@ coralsense-mlops/
 ├── notebooks/                # Exploratory analysis
 ├── reports/                  # Evidently HTML reports, plots
 ├── artifacts/                # MLflow tracking store
-├── scripts/                  # CLI helper scripts
+├── scripts/
+│   ├── ci_check.sh           # Local CI equivalent (M8)
+│   ├── ci_smoke_test.py      # ML smoke test (M8)
+│   ├── ci_validate_pipeline.py # DVC pipeline validation (M8)
+│   ├── export_champions.py   # Export deployment bundles (M12)
+│   ├── verify_deployment_bundle.py # Bundle integrity checks (M12)
+│   └── run_retraining.py     # Retrain + compare orchestrator (M13)
 ├── src/
 │   ├── config.py             # Central config (paths, params, logging)
 │   ├── data/
@@ -449,7 +642,12 @@ coralsense-mlops/
 │   │   ├── train.py          # Model training + MLflow (M5)
 │   │   ├── evaluate.py       # Metrics + confusion matrix (M5)
 │   │   ├── predict.py        # Inference helpers (M6)
-│   │   └── registry.py       # MLflow model registry (M6)
+│   │   ├── registry.py       # MLflow model registry (M6)
+│   │   ├── retrain.py        # Challenger training + input validation (M13)
+│   │   ├── compare.py        # Champion-challenger comparison engine (M13)
+│   │   ├── promote.py        # Explicit promotion with approval guard (M13)
+│   │   ├── rollback.py       # Champion rollback with dry-run (M13)
+│   │   └── model_card.py     # Markdown model card generator (M13)
 │   ├── monitoring/
 │   │   ├── drift.py          # Evidently drift report (M10)
 │   │   └── performance.py    # Production performance tracking (M10)
@@ -466,7 +664,8 @@ coralsense-mlops/
     ├── test_validate.py      # M3
     ├── test_preprocess.py    # M4
     ├── test_models.py        # M5
-    └── test_api.py           # M9
+    ├── test_api.py           # M9
+    └── test_retraining.py    # M13 — 70 tests (challenger, compare, promote, rollback)
 ```
 
 ---

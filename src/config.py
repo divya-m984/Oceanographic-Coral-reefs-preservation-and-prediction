@@ -154,6 +154,7 @@ class Config:
     shift_scale: float
 
     shap_background_samples: int
+    retraining: dict[str, Any]
 
     # ── Paths ────────────────────────────────────────────────────────────────
     paths: Paths = field(default_factory=lambda: Paths.from_root(_PROJECT_ROOT))
@@ -224,6 +225,8 @@ class Config:
             shift_scale=p["monitoring"]["shift_scale"],
             # shap
             shap_background_samples=p["shap"]["background_samples"],
+            # retraining
+            retraining=p.get("retraining", {}),
             # paths
             paths=paths,
         )

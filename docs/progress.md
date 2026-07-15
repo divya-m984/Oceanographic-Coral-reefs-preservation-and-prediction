@@ -865,6 +865,101 @@ docker compose down -v
 
 ---
 
+### M13 — Controlled Retraining, Challenger Evaluation, Promotion and Rollback
+
+**Scientific safety rule enforced**: The M11 unlabelled production window cannot be used
+for retraining. A RETRAIN drift recommendation requires an explicitly labelled CSV and a
+declared data source (`synthetic` or `field_labelled`).
+
+**New files**:
+
+| File | Purpose |
+|:-----|:--------|
+| `src/models/retrain.py` | Input validation, preprocessing, challenger training, registration |
+| `src/models/compare.py` | Champion–challenger metric comparison engine |
+| `src/models/promote.py` | Explicit promotion with approval, gate revalidation, receipt |
+| `src/models/rollback.py` | Explicit rollback with dry-run, version preservation, receipt |
+| `src/models/model_card.py` | Markdown model card generator |
+| `scripts/run_retraining.py` | CLI orchestrator (retrain + compare, no auto-promotion) |
+| `tests/test_retraining.py` | 70 tests covering all workflow stages |
+
+**params.yaml additions**:
+```yaml
+retraining:
+  experiment_suffix: "_retraining"
+  min_train_rows: 200
+  min_class_count: 5
+  holdout_size: 0.20
+  comparison:
+    health:  { min_abs_macro_f1: 0.65, max_macro_f1_regression: 0.05, ... }
+    restoration: { min_abs_macro_f1: 0.68, max_macro_f1_regression: 0.05, ... }
+```
+
+**Retraining input contract**:
+- Requires all canonical classes per task (all 4 health classes, all 3 restoration classes)
+- Rejects unlabelled production windows, missing targets, invalid labels, non-finite values,
+  near-duplicate datasets, and insufficient rows
+- SHA-256 hashes input file and drift report for full provenance
+- Requires explicit `--data-source synthetic|field_labelled` declaration
+- Requires drift RETRAIN recommendation OR documented `--reason`
+
+**Comparison outcomes**: `reject` | `review_required` | `eligible_for_promotion`
+- Never produces "automatically promoted"
+- Champion alias is never changed by retrain or compare
+
+**Promotion**: requires `--approve`, `--approver`, `--reason`, comparison report with
+eligible outcome, quality-gate revalidation; `--dry-run` for verification
+
+**Rollback**: requires `--approve`, `--approver`, `--reason`, `--dry-run` supported;
+never deletes model versions
+
+**M13 verification results** (2026-07-15):
+
+```
+# Unlabelled window rejected:
+python -m src.models.retrain --input data/production/production.csv ...
+→ ERROR: Target column 'reef_health' is missing. Unlabelled production windows cannot be used for retraining.
+
+# Dry-run with drift summary (15,000 rows):
+python -m src.models.retrain --input data/raw/observations_validated.csv --task all \
+  --data-source synthetic --drift-summary reports/drift_summary.json --dry-run
+→ DRY-RUN: validation PASSED for tasks=['health', 'restoration'], data_source=synthetic
+
+# Quick challenger in temp registry:
+python -m src.models.retrain --input data/raw/observations_validated.csv --task health \
+  --data-source synthetic --drift-summary reports/drift_summary.json \
+  --mlflow-uri sqlite:////tmp/m13_demo_mlruns.db --quick
+→ [health] coralsense_reef_health v1 algo=logistic_regression cv_f1=0.7612
+
+# Comparison outcome (same CV score → review_required):
+→ Outcome: review_required  Champion alias changed: False
+
+# Promotion dry-run (canonical champion unchanged):
+python -m src.models.promote --model coralsense_reef_health --version 1 \
+  --comparison-report ... --approve --approver "Divya" --reason "..." --dry-run
+→ alias_set: False  previous_champion: 1
+
+# Rollback dry-run (canonical champion unchanged):
+python -m src.models.rollback --model coralsense_reef_health --version 1 \
+  --approve --approver "Divya" --reason "..." --dry-run
+→ DRY-RUN: would roll back: coralsense_reef_health v1 → v1  Alias set: False
+```
+
+**Registry integrity after M13 verification**:
+- `artifacts/mlruns.db` SHA-256: `b76a401522754ad050793f392ba2cdf0e8f9e4b76140dc8ebb9f604c95f7c477` (unchanged)
+- `data/raw/observations.csv` SHA-256: `a03cb3e92ba1904ae07147da95f96aa689d092d56fc41b040b701a101ad8f458` (unchanged)
+- `coralsense_reef_health`: 4 versions, champion=v1 (unchanged)
+- `coralsense_restoration_suitability`: 4 versions, champion=v1 (unchanged)
+
+**Test count**: 840 (existing) + 70 (M13) = **910 tests total**
+
+```bash
+python -m pytest tests/ -q   # 910 tests
+python -m pytest tests/test_retraining.py -q   # 70 M13 tests
+```
+
+---
+
 ## Planned Next Steps
 
-- All milestones M1–M12 complete.
+- M1–M13 all complete.

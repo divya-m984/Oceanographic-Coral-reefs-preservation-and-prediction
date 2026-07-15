@@ -138,3 +138,34 @@ monitoring:
 
 shap:
   background_samples: 500
+
+retraining:
+  # Experiment names: base experiment name + this suffix for challenger runs
+  experiment_suffix: "_retraining"
+  # Minimum number of rows in the retraining CSV (after splitting off holdout)
+  min_train_rows: 200
+  # Minimum samples per class (any class with fewer triggers rejection)
+  min_class_count: 5
+  # Required class sets — retraining must cover all canonical classes
+  required_health_classes:
+    - healthy
+    - stressed
+    - bleached
+    - severely_degraded
+  required_restoration_classes:
+    - suitable
+    - moderately_suitable
+    - unsuitable
+  # Holdout split fraction from the provided labelled CSV
+  holdout_size: 0.20
+  comparison:
+    health:
+      min_abs_macro_f1: 0.65
+      max_macro_f1_regression: 0.05   # challenger may not be >5pp worse than champion
+      min_balanced_accuracy: 0.65
+      max_per_class_recall_regression: 0.10  # no single class may regress >10pp
+    restoration:
+      min_abs_macro_f1: 0.68
+      max_macro_f1_regression: 0.05
+      min_balanced_accuracy: 0.68
+      max_per_class_recall_regression: 0.10
