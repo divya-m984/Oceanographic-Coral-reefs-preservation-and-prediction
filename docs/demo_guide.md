@@ -347,7 +347,7 @@ python scripts/demo.py stop
 docker compose down
 ```
 
-**Confirm:** `docker ps` shows no CoralSense containers.
+**Confirm:** `docker ps` shows no Oceanographic MLOps containers.
 
 ---
 
