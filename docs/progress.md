@@ -1,4 +1,4 @@
-# CoralSense MLOps — Project Progress
+# Oceanographic MLOps — Project Progress
 
 > **Synthetic-data disclaimer**: All metrics and predictions in this document reflect
 > performance on a synthetic dataset generated for college project purposes only.
@@ -7,6 +7,29 @@
 ---
 
 ## Completed Milestones
+
+### M14 — Release Readiness and Course Evidence
+- `Makefile` — safe build, test, demo, and evidence targets; narrowly scoped `clean-generated`
+- `scripts/preflight.py` — read-only 18-check preflight (JSON output, exit codes)
+- `scripts/demo.py` — demo orchestrator: `start`, `status`, `verify`, `stop`; bounded health polling
+- `scripts/collect_evidence.py` — generates `reports/project_manifest.json` (read-only)
+- `docs/architecture.md` — full system architecture with sonar/environmental distinction
+- `docs/course_evidence.md` — factual course evidence (activities 2–7, levels 0–3)
+- `docs/demo_guide.md` — 8–12 minute classroom demonstration guide with faculty Q&A
+- `CHANGELOG.md` — milestone history M1–M14 (no fabricated dates)
+- `tests/test_demo.py` — preflight, demo, manifest, Makefile, governance page tests
+- `src/dashboard/pages/9_Governance.py` — read-only governance Streamlit page
+- `reports/project_manifest.json` — evidence manifest (stable JSON schema)
+- Updated `README.md` with exact project title, quick start, architecture, demo commands
+- Final verification: dataset checksum a03cb3e9, DB checksum b76a4015, both champions on v1
+
+```bash
+make preflight                        # system check
+python scripts/demo.py start          # start Docker stack
+python scripts/demo.py verify         # verify prediction + all services
+python scripts/demo.py stop           # stop cleanly
+python scripts/collect_evidence.py    # generate manifest
+```
 
 ### M1 — Project Foundation
 - Python 3.14 virtual environment (`.venv/`)

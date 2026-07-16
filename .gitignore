@@ -70,6 +70,8 @@ deploy/bundles/
 # Reports (generated)
 reports/*.html
 reports/*.png
+# Evidence manifest is generated on-demand by `make evidence` — not committed
+reports/project_manifest.json
 
 # Logs
 *.log

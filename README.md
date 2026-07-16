@@ -1,10 +1,8 @@
-# CoralSense MLOps
-
-**An MLOps-Driven Multi-Sensor Platform for Coral Reef Health Prediction and Restoration Planning**
+# Oceanographic: A Machine Learning-Driven Sonar Framework for Real-Time Coral Reef Habitat Prediction and Marine Ecosystem Monitoring
 
 > **DISCLAIMER — SYNTHETIC DATA ONLY**
 > All observations used in this project are computer-generated using a documented
-> synthetic data generator. Predictions produced by CoralSense models do **not**
+> synthetic data generator. Predictions produced by this system do **not**
 > represent real conservation advice and must not be used to guide actual marine
 > management decisions. All scientific assumptions are documented in
 > `src/data/generate_data.py` and `params.yaml`.
@@ -14,25 +12,55 @@
 ## Table of Contents
 
 1. [Project Overview](#project-overview)
-2. [Architecture](#architecture)
-3. [CI Status](#ci-status)
-4. [Requirements](#requirements)
-5. [Setup](#setup)
-6. [Configuration](#configuration)
-7. [Development Commands](#development-commands)
-8. [API Service](#api-service)
-9. [Milestone Commands](#milestone-commands)
-10. [Running Tests](#running-tests)
-11. [Docker](#docker)
-12. [M13 — Controlled Retraining and Model Governance](#m13--controlled-retraining-and-model-governance)
-13. [Project Structure](#project-structure)
-14. [Scientific Assumptions](#scientific-assumptions)
+2. [Quick Start](#quick-start)
+3. [Architecture](#architecture)
+4. [CI Status](#ci-status)
+5. [Requirements](#requirements)
+6. [Setup](#setup)
+7. [Configuration](#configuration)
+8. [Development Commands](#development-commands)
+9. [API Service](#api-service)
+10. [Milestone Commands](#milestone-commands)
+11. [Running Tests](#running-tests)
+12. [Docker](#docker)
+13. [Classroom Demo](#classroom-demo)
+14. [M13 — Controlled Retraining and Model Governance](#m13--controlled-retraining-and-model-governance)
+15. [MLOps Maturity](#mlops-maturity)
+16. [Project Structure](#project-structure)
+17. [Scientific Assumptions](#scientific-assumptions)
+
+---
+
+## Quick Start
+
+```bash
+# 1. Install dependencies
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && pip install -e .
+
+# 2. Run preflight check
+make preflight
+
+# 3. Run all tests
+make test
+
+# 4. Export models and start Docker demonstration
+make export-models
+python scripts/demo.py start
+# URLs: MLflow :5000 | FastAPI :8000 | Streamlit :8501
+
+# 5. Verify the demo
+python scripts/demo.py verify
+
+# 6. Stop demo
+python scripts/demo.py stop
+```
 
 ---
 
 ## Project Overview
 
-CoralSense processes geotagged marine sensor observations and provides two
+The platform processes geotagged marine sensor observations and provides two
 classification tasks:
 
 | Task | Labels |
@@ -92,24 +120,32 @@ The temporary MLflow database (`ci_check_mlruns.db`) is deleted on exit.
 
 ## Architecture
 
+See [`docs/architecture.md`](docs/architecture.md) for the full system diagram.
+
+**Data sources (proposed):**
+- **Sonar** captures reef structure: backscatter, rugosity, depth, hard-substrate fraction,
+  acoustic complexity. Sonar does NOT directly measure bleaching, coral cover, or water chemistry.
+- **Environmental sensors** capture temperature, pH, salinity, dissolved oxygen, turbidity, light, current.
+- **Biological surveys** capture coral cover, bleaching %, disease %.
+- **Current implementation:** synthetic data only (real sonar hardware not yet deployed).
+
 ```
-Synthetic Data Generator
+Synthetic Data Generator  ─►  Validation (Pandera)
         │
         ▼
-  DVC Pipeline (dvc.yaml)
-  ┌─────────────────────────────────────────┐
-  │  generate → validate → preprocess →     │
-  │  build_features → train → evaluate      │
-  └─────────────────────────────────────────┘
+  DVC Pipeline — 7 stages (dvc.yaml)
+  generate → validate → preprocess → train → evaluate
+            → register_candidate → run_drift
         │
         ▼
-  MLflow Tracking + Model Registry
+  MLflow Tracking + Model Registry (artifacts/mlruns.db)
         │
-        ├──► FastAPI  :8000  (POST /predict, GET /health)
-        │
-        └──► Streamlit :8501  (map, stats, predict, drift)
+        ├──► FastAPI  :8000  (7 endpoints, bundle mode)
+        ├──► Streamlit :8501  (10 pages, reef map)
+        ├──► Evidently Drift Monitoring
+        └──► Controlled Retraining Governance (M13)
                 │
-                └──► Evidently Drift Reports
+                └──► Docker Compose (4 services)
 ```
 
 ---
@@ -595,10 +631,36 @@ python -m src.models.model_card \
 ### Synthetic-data limitation
 
 All metrics reported in comparison reports, promotion receipts, and model cards reflect
-performance on the CoralSense **synthetic** dataset. They do not indicate real-world
+performance on the **synthetic** dataset. They do not indicate real-world
 coral reef prediction accuracy. Replace `src/data/generate_data.py` with a real sensor
 ingestion module and supply genuinely labelled field data before drawing any ecological
 conclusions.
+
+---
+
+## Classroom Demo
+
+```bash
+make preflight          # pre-demo system check
+make export-models      # export champion bundles
+make drift              # generate drift report
+python scripts/demo.py start    # start full Docker stack
+python scripts/demo.py verify   # submit test prediction
+python scripts/demo.py stop     # stop cleanly
+```
+
+See [`docs/demo_guide.md`](docs/demo_guide.md) for the full 8–12 minute demonstration plan.
+
+---
+
+## MLOps Maturity
+
+| Level | Demonstrated capability |
+|---|---|
+| **Level 0** | `make test` (910 tests), `dvc repro`, `make lint` |
+| **Level 1** | GitHub Actions CI (5 jobs, every push) |
+| **Level 2** | `docker compose up` deploys all services; FastAPI + Streamlit |
+| **Level 3** | Evidently drift monitoring, RETRAIN recommendation, governed challenger training, explicit approval promotion, rollback with receipt |
 
 ---
 
@@ -607,13 +669,15 @@ conclusions.
 ```
 coralsense-mlops/
 ├── README.md
+├── Makefile                  # Safe build/test/demo targets (M14)
+├── CHANGELOG.md              # Milestone history (M14)
 ├── requirements.txt          # Full dependency list
 ├── requirements-dev.txt      # M1 minimal deps (pytest, ruff, pyyaml)
 ├── pyproject.toml            # Build config, pytest, ruff settings
 ├── params.yaml               # All tunable knobs (single source of truth)
 ├── .env.example              # Environment variable template
-├── dvc.yaml                  # Pipeline DAG (M7)
-├── docker-compose.yml        # Container orchestration (M11)
+├── dvc.yaml                  # Pipeline DAG (M7 — 7 stages)
+├── docker-compose.yml        # Container orchestration (M12)
 ├── data/
 │   ├── raw/                  # Generated observations (DVC-tracked)
 │   ├── processed/            # Train/test splits
@@ -624,12 +688,20 @@ coralsense-mlops/
 ├── reports/                  # Evidently HTML reports, plots
 ├── artifacts/                # MLflow tracking store
 ├── scripts/
+│   ├── preflight.py          # Read-only system check (M14)
+│   ├── demo.py               # Demo orchestrator start/status/verify/stop (M14)
+│   ├── collect_evidence.py   # Generates reports/project_manifest.json (M14)
 │   ├── ci_check.sh           # Local CI equivalent (M8)
 │   ├── ci_smoke_test.py      # ML smoke test (M8)
 │   ├── ci_validate_pipeline.py # DVC pipeline validation (M8)
 │   ├── export_champions.py   # Export deployment bundles (M12)
 │   ├── verify_deployment_bundle.py # Bundle integrity checks (M12)
 │   └── run_retraining.py     # Retrain + compare orchestrator (M13)
+├── docs/
+│   ├── architecture.md       # System architecture (M14)
+│   ├── course_evidence.md    # Course activities evidence (M14)
+│   ├── demo_guide.md         # 8-12 min classroom demo guide (M14)
+│   └── progress.md           # Milestone progress log
 ├── src/
 │   ├── config.py             # Central config (paths, params, logging)
 │   ├── data/
