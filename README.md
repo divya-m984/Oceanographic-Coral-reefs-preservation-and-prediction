@@ -1,247 +1,314 @@
 # Oceanographic: A Machine Learning-Driven Sonar Framework for Real-Time Coral Reef Habitat Prediction and Marine Ecosystem Monitoring
 
-> **DISCLAIMER — SYNTHETIC DATA ONLY**
-> All observations used in this project are computer-generated using a documented
-> synthetic data generator. Predictions produced by this system do **not**
-> represent real conservation advice and must not be used to guide actual marine
-> management decisions. All scientific assumptions are documented in
-> `src/data/generate_data.py` and `params.yaml`.
+**End-to-end MLOps research prototype for coral reef health and restoration-suitability classification using synthetic sonar and environmental sensor data.**
+
+![Python](https://img.shields.io/badge/Python-%E2%89%A5%203.11-blue?logo=python&logoColor=white)
+![CI](https://github.com/divya-m984/Oceanographic-reef-mlops-proj/actions/workflows/ci.yml/badge.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.130+-009688?logo=fastapi&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.40+-FF4B4B?logo=streamlit&logoColor=white)
+![MLflow](https://img.shields.io/badge/MLflow-3.0+-0194E2?logo=mlflow&logoColor=white)
+![DVC](https://img.shields.io/badge/DVC-3.50+-945DD6?logo=dvc&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+
+> **Synthetic Data Only** — All observations in this project are computer-generated.
+> Predictions do **not** represent real conservation advice and must not be used
+> to guide actual marine management decisions.
 
 ---
 
 ## Table of Contents
 
 1. [Project Overview](#project-overview)
-2. [Quick Start](#quick-start)
-3. [Architecture](#architecture)
-4. [CI Status](#ci-status)
-5. [Requirements](#requirements)
-6. [Setup](#setup)
-7. [Configuration](#configuration)
-8. [Development Commands](#development-commands)
-9. [API Service](#api-service)
-10. [Milestone Commands](#milestone-commands)
-11. [Running Tests](#running-tests)
-12. [Docker](#docker)
-13. [Classroom Demo](#classroom-demo)
-14. [M13 — Controlled Retraining and Model Governance](#m13--controlled-retraining-and-model-governance)
-15. [MLOps Maturity](#mlops-maturity)
-16. [Project Structure](#project-structure)
-17. [Scientific Assumptions](#scientific-assumptions)
-
----
-
-## Quick Start
-
-```bash
-# 1. Install dependencies
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt && pip install -e .
-
-# 2. Run preflight check
-make preflight
-
-# 3. Run all tests
-make test
-
-# 4. Export models and start Docker demonstration
-make export-models
-python scripts/demo.py start
-# URLs: MLflow :5000 | FastAPI :8000 | Streamlit :8501
-
-# 5. Verify the demo
-python scripts/demo.py verify
-
-# 6. Stop demo
-python scripts/demo.py stop
-```
+2. [Key Capabilities](#key-capabilities)
+3. [Current Project Status](#current-project-status)
+4. [System Architecture](#system-architecture)
+5. [MLOps Lifecycle](#mlops-lifecycle)
+6. [Reproducible DVC Pipeline](#reproducible-dvc-pipeline)
+7. [Dataset Description](#dataset-description)
+8. [Machine-Learning Tasks](#machine-learning-tasks)
+9. [Model Performance](#model-performance)
+10. [MLflow Experiment Tracking and Registry](#mlflow-experiment-tracking-and-registry)
+11. [API Service](#api-service)
+12. [Streamlit Dashboard](#streamlit-dashboard)
+13. [Local Setup](#local-setup)
+14. [Running the Complete Application](#running-the-complete-application)
+15. [Testing and Code Quality](#testing-and-code-quality)
+16. [CI/CD Architecture](#cicd-architecture)
+17. [Monitoring and Drift](#monitoring-and-drift)
+18. [Model Governance](#model-governance)
+19. [Project Structure](#project-structure)
+20. [Technology Stack](#technology-stack)
+21. [Limitations](#limitations)
+22. [Future Work](#future-work)
+23. [Responsible-Use Notice](#responsible-use-notice)
+24. [Documentation](#documentation)
+25. [License](#license)
+26. [Attribution](#attribution)
 
 ---
 
 ## Project Overview
 
-The platform processes geotagged marine sensor observations and provides two
-classification tasks:
+Coral reef ecosystems face accelerating degradation from ocean warming, acidification, and pollution. Monitoring reef health at scale requires integrating data from sonar instruments, environmental sensors, and biological surveys — then translating that data into actionable classification decisions.
 
-| Task | Labels |
-|---|---|
-| **Reef Health** | `healthy`, `stressed`, `bleached`, `severely_degraded` |
-| **Restoration Suitability** | `suitable`, `moderately_suitable`, `unsuitable` |
+**Oceanographic** is an MLOps-based research and classroom prototype that demonstrates how such a system could be built from scratch. It implements two supervised classification tasks — reef health assessment and restoration-suitability scoring — within a fully reproducible machine-learning pipeline, governed model registry, inference service, interactive dashboard, and containerised deployment stack.
 
-The platform covers four Indian reef regions:
-- Lakshadweep
-- Gulf of Mannar
-- Gulf of Kutch
-- Andaman and Nicobar Islands
+**Current prototype scope:** The system operates entirely on a **synthetic dataset of 15,000 observations** generated by a documented statistical model. Synthetic sonar and environmental sensor records are used to demonstrate the software and MLOps workflow because verified field equipment and expert-labelled real-world data are not currently available. No predictions from this system have been validated by marine scientists or used for real restoration decisions.
 
 ---
 
-## CI Status
+## Key Capabilities
 
-The GitHub Actions workflow (`.github/workflows/ci.yml`) runs five jobs on every push and pull request to `master` or `main`, and can also be triggered manually.
-
-### What runs on every push / pull request
-
-| Job | What it does | Timeout |
-|---|---|---|
-| **code-quality** | `ruff check` + `ruff format --check` on `src/`, `tests/`, `scripts/` | 10 min |
-| **tests** | Full 498-test suite with a disposable MLflow database | 30 min |
-| **pipeline-validation** | `dvc dag`, DVC YAML structure tests, isolated data round-trip (400 rows) | 10 min |
-| **ml-smoke-test** | Quick training of both tasks on 500 rows; verifies predictions and metrics | 15 min |
-| **build** | `python -m build` (wheel + sdist); uploads `dist/` artifact | 10 min |
-
-### What is intentionally excluded from CI
-
-- The full 10-minute DVC pipeline (`dvc repro`) — never run on push.
-- The `register_candidate` stage — never invoked; no model versions are added.
-- Champion promotion (`--promote`) — never run; canonical registry is read-only.
-- The canonical MLflow database (`artifacts/mlruns.db`) — never opened; CI uses `sqlite:///ci_mlruns.db`.
-- DVC data pull — no remote is configured; pipeline-validation uses isolated temp data.
-- Model artifacts (`models/*.joblib`) — not uploaded; build artifact contains only the Python package.
-- The `run_drift` DVC stage — never run in CI; requires real champion models and takes ~30s.
-
-### Local equivalent
-
-Run the same checks locally without modifying real project artifacts:
-
-```bash
-bash scripts/ci_check.sh
-```
-
-This script:
-1. Runs `ruff check` and `ruff format --check`
-2. Runs the full test suite with `MLFLOW_TRACKING_URI=sqlite:///ci_check_mlruns.db`
-3. Runs `scripts/ci_validate_pipeline.py` (isolated temp data)
-4. Runs `scripts/ci_smoke_test.py` (isolated temp MLflow DB)
-
-The temporary MLflow database (`ci_check_mlruns.db`) is deleted on exit.
+- **Sonar and environmental feature processing** — 15 numeric features (acoustic backscatter, rugosity, depth, temperature, pH, dissolved oxygen, turbidity, and more) plus one categorical region feature, with 6 engineered derived features
+- **Reef health classification** — Four-class classification: healthy, stressed, bleached, severely degraded
+- **Restoration-suitability classification** — Three-class classification: suitable, moderately suitable, unsuitable
+- **Schema validation** — Pandera-based data contract enforcement on raw observations
+- **Reproducible preprocessing** — Stratified train/test split, StandardScaler + OneHotEncoder pipeline, fitted on training data only
+- **Model comparison** — Logistic Regression, Random Forest, and XGBoost evaluated via 5-fold cross-validation
+- **MLflow experiment tracking and registry** — All runs logged with parameters, metrics, and artifacts; champion/candidate versioning with manual promotion
+- **DVC pipeline** — Seven-stage reproducible DAG with parameterised dependencies and cached stages
+- **FastAPI inference** — Seven REST endpoints with Pydantic validation, batch support, and graceful degradation
+- **Streamlit dashboard** — Ten-page interactive dashboard with reef maps, predictions, model performance, drift monitoring, and governance views
+- **Drift monitoring** — Evidently feature drift, chi-squared prediction drift, and KS confidence drift on simulated production windows
+- **Controlled retraining and governance** — Challenger training, champion comparison, explicit approval-gated promotion, and auditable rollback
+- **Docker orchestration** — Four-service Compose stack (MLflow, API, Dashboard, Drift) with health checks and read-only canonical database
+- **GitHub Actions CI** — Five-job pipeline: code quality, test suite, pipeline validation, ML smoke test, package build
 
 ---
 
-## Architecture
+## Current Project Status
 
-See [`docs/architecture.md`](docs/architecture.md) for the full system diagram.
-
-**Data sources (proposed):**
-- **Sonar** captures reef structure: backscatter, rugosity, depth, hard-substrate fraction,
-  acoustic complexity. Sonar does NOT directly measure bleaching, coral cover, or water chemistry.
-- **Environmental sensors** capture temperature, pH, salinity, dissolved oxygen, turbidity, light, current.
-- **Biological surveys** capture coral cover, bleaching %, disease %.
-- **Current implementation:** synthetic data only (real sonar hardware not yet deployed).
-
-```
-Synthetic Data Generator  ─►  Validation (Pandera)
-        │
-        ▼
-  DVC Pipeline — 7 stages (dvc.yaml)
-  generate → validate → preprocess → train → evaluate
-            → register_candidate → run_drift
-        │
-        ▼
-  MLflow Tracking + Model Registry (artifacts/mlruns.db)
-        │
-        ├──► FastAPI  :8000  (7 endpoints, bundle mode)
-        ├──► Streamlit :8501  (10 pages, reef map)
-        ├──► Evidently Drift Monitoring
-        └──► Controlled Retraining Governance (M13)
-                │
-                └──► Docker Compose (4 services)
-```
+| Category | Status | Notes |
+|----------|--------|-------|
+| Synthetic data generator | Implemented | 15,000 observations, 4 Indian reef regions, seed-reproducible |
+| Schema validation | Implemented | Pandera contract on all 21 columns |
+| Feature engineering | Implemented | 6 derived features (thermal stress, oxygen stress, acidity deviation, water quality index, substrate stability, structural complexity) |
+| Model training and selection | Implemented | 3 algorithms x 2 tasks, 5-fold CV, MLflow-tracked |
+| MLflow registry | Implemented | Champion v1 models registered and aliased |
+| DVC pipeline | Implemented | 7 stages, fully reproducible |
+| FastAPI inference | Implemented | 7 endpoints, bundle and registry loading modes |
+| Streamlit dashboard | Implemented | 10 pages including reef map and live predictions |
+| Drift monitoring | Implemented | Simulated production windows with configurable shift scale |
+| Controlled retraining | Implemented | Challenger training, comparison, gated promotion, rollback |
+| Docker deployment | Implemented | 4-service local Compose stack |
+| CI/CD pipeline | Implemented | 5 GitHub Actions jobs on every push/PR |
+| Real sonar integration | Not yet implemented | Requires field equipment and calibration |
+| Marine-scientist validation | Not yet performed | Synthetic data only; no ecological conclusions |
+| Cloud deployment | Not yet implemented | Local prototype only |
 
 ---
 
-## Requirements
+## System Architecture
 
-- Python >= 3.11 (tested on 3.14.6 / Arch Linux)
-- pip >= 24
-- Docker + Docker Compose (optional, for containerised deployment)
-- Git
+```mermaid
+flowchart TB
+    subgraph Data["Data Layer"]
+        SYN["Synthetic Data Generator"]
+        VAL["Pandera Validation"]
+        PRE["Preprocessing + Feature Engineering"]
+    end
 
----
+    subgraph ML["ML Layer"]
+        TRN["Model Training (LR / RF / XGB)"]
+        EVL["Evaluation + Metrics"]
+        REG["MLflow Registry"]
+    end
 
-## Setup
+    subgraph Serving["Serving Layer"]
+        API["FastAPI :8000"]
+        DASH["Streamlit Dashboard :8501"]
+        MLF["MLflow UI :5000"]
+    end
 
-### 1. Clone the repository
+    subgraph Ops["MLOps Layer"]
+        DVC["DVC Pipeline"]
+        CI["GitHub Actions CI"]
+        DRIFT["Drift Monitoring (Evidently)"]
+        GOV["Governance (Promote / Rollback)"]
+    end
 
-```bash
-git clone <repo-url> coralsense-mlops
-cd coralsense-mlops
-```
-
-### 2. Create a virtual environment
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Install dependencies
-
-**M1 only (scaffold + config tests):**
-
-```bash
-pip install -r requirements-dev.txt
-pip install -e .
-```
-
-**Full stack (M2 onwards — install when each milestone requires it):**
-
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
-### 4. Configure environment
-
-```bash
-cp .env.example .env
-# Edit .env if you need non-default ports or a remote MLflow server
+    SYN --> VAL --> PRE --> TRN --> EVL --> REG
+    REG --> API --> DASH
+    REG --> MLF
+    DVC -.->|controls reproducibility| Data
+    DVC -.->|controls reproducibility| ML
+    CI -.->|validates on push| DVC
+    DRIFT -.->|observes predictions| API
+    DRIFT -.->|recommends retraining| GOV
+    GOV -.->|promotes/rolls back| REG
 ```
 
 ---
 
-## Configuration
+## MLOps Lifecycle
 
-All tunable parameters live in **`params.yaml`**.
-Runtime secrets and service URLs live in **`.env`** (gitignored).
-`src/config.py` merges both into a single `Config` dataclass.
-
-```python
-from src.config import get_config, setup_logging
-
-logger = setup_logging(__name__)
-cfg = get_config()
-print(cfg.n_samples)           # 12000
-print(cfg.paths.raw_data_dir)  # /abs/path/to/data/raw
-```
+1. **Data preparation** — `src/data/generate_data.py` produces 15,000 synthetic observations from documented statistical rules with a fixed random seed
+2. **Validation** — `src/data/validate.py` enforces a Pandera schema on all columns (types, ranges, allowed categories)
+3. **Feature engineering** — `src/features/build_features.py` computes 6 derived features; `src/data/preprocess.py` performs a stratified 80/20 split and fits a `ColumnTransformer` on the training set only
+4. **Training** — `src/models/train.py` trains Logistic Regression, Random Forest, and XGBoost for both tasks with 5-fold cross-validation; selects the best model by CV macro-F1
+5. **Evaluation** — `src/models/evaluate.py` computes test-set metrics, confusion matrices, and per-class reports; `src/models/run_evaluate.py` extracts summary metrics into `reports/metrics.json`
+6. **Experiment tracking** — All training runs are logged to MLflow (parameters, metrics, artifacts, model signatures)
+7. **Registration** — `src/models/run_register_candidate.py` registers the best model as a candidate version; champion promotion is a separate governed step
+8. **Deployment** — FastAPI serves champion models via bundle-mode (checksum-verified joblib artefacts) or registry-mode (MLflow client)
+9. **Monitoring** — Evidently feature drift, chi-squared prediction drift, and Kolmogorov-Smirnov confidence drift computed against a reference window
+10. **Controlled retraining** — `src/models/retrain.py` validates labelled input, trains challengers, and registers them without promotion; `src/models/compare.py` evaluates against the champion; `src/models/promote.py` requires explicit `--approve`, `--approver`, and `--reason` flags
 
 ---
 
-## Development Commands
+## Reproducible DVC Pipeline
+
+The pipeline is defined in `dvc.yaml` with seven stages. All parameters are sourced from `params.yaml`.
+
+```mermaid
+flowchart LR
+    GEN["generate"] --> VAL["validate"]
+    VAL --> PRE["preprocess"]
+    PRE --> TRN["train"]
+    TRN --> EVL["evaluate"]
+    EVL --> REGC["register_candidate"]
+    GEN --> DRFT["run_drift"]
+    PRE --> DRFT
+    TRN --> DRFT
+```
+
+The `run_drift` stage depends on raw data (from `generate`), preprocessors (from `preprocess`), and trained models (from `train`). It runs in parallel with the `evaluate` → `register_candidate` chain.
+
+**Useful commands:**
+
+| Command | Description |
+|---------|-------------|
+| `dvc status` | Show which stages are stale |
+| `dvc dag` | Display the pipeline DAG |
+| `dvc repro --dry` | Preview what would run without executing |
+| `dvc metrics show` | Display tracked metrics |
+| `dvc params diff` | Show parameter changes since last run |
+
+**Important:** Running `dvc repro` will execute the full pipeline, which trains models and registers candidate versions. Candidate registration **never** automatically promotes the champion — promotion is always an explicit governance step.
+
+---
+
+## Dataset Description
+
+The dataset contains **15,000 synthetic observations** split into 12,000 training and 3,000 test observations (stratified 80/20 split). All observations are generated by `src/data/generate_data.py` with `random_seed=42` for full reproducibility.
+
+Four Indian reef regions are covered: Lakshadweep, Gulf of Mannar, Gulf of Kutch, and Andaman and Nicobar Islands.
+
+### Feature table
+
+| Category | Feature | Unit | Range | Description |
+|----------|---------|------|-------|-------------|
+| Spatial | `region` | — | 4 categories | Named reef region |
+| Spatial | `latitude`, `longitude` | degrees | per region | WGS-84 coordinates |
+| Spatial | `timestamp` | — | 2018–2024 | UTC observation timestamp |
+| Environmental | `depth_m` | m | 0–50 | Sensor deployment depth |
+| Environmental | `water_temperature_c` | °C | 10–42 | In-situ water temperature |
+| Environmental | `ph` | — | 7.0–9.0 | Seawater pH (total scale) |
+| Environmental | `salinity_ppt` | ppt | 20–50 | Practical salinity |
+| Environmental | `dissolved_oxygen_mg_l` | mg/L | 0–15 | Dissolved oxygen |
+| Environmental | `turbidity_ntu` | NTU | 0–100 | Water turbidity |
+| Environmental | `light_intensity` | umol m-2 s-1 | 0–3000 | Photosynthetically active radiation |
+| Environmental | `current_speed_m_s` | m/s | 0–5 | Near-bottom current speed |
+| Sonar / Acoustic | `sonar_backscatter` | dB | -60 to 0 | Acoustic backscatter intensity |
+| Sonar / Acoustic | `rugosity_index` | — | 1–10 | Benthic surface rugosity |
+| Sonar / Acoustic | `hard_substrate_percentage` | % | 0–100 | Hard substrate coverage |
+| Sonar / Acoustic | `acoustic_complexity_index` | — | 0–1 | Normalised acoustic complexity |
+| Biological | `coral_cover_percentage` | % | 0–100 | Live coral cover |
+| Biological | `bleaching_percentage` | % | 0–100 | Bleached coral tissue fraction |
+| Biological | `disease_percentage` | % | 0–100 | Disease-affected colony fraction |
+| **Target** | `reef_health` | — | 4 classes | healthy, stressed, bleached, severely_degraded |
+| **Target** | `restoration_suitability` | — | 3 classes | suitable, moderately_suitable, unsuitable |
+
+Six derived features are computed during preprocessing: `thermal_stress_index`, `oxygen_stress_index`, `acidity_deviation`, `water_quality_index`, `substrate_stability_score`, and `structural_complexity_score`.
+
+**Synthetic-data limitations:** All feature distributions, correlations, and label thresholds are approximations. The data does not model temporal autocorrelation, fine-scale spatial gradients, or non-Gaussian instrument noise. See [`docs/data_dictionary.md`](docs/data_dictionary.md) for full documentation.
+
+---
+
+## Machine-Learning Tasks
+
+| Property | Reef Health | Restoration Suitability |
+|----------|-------------|-------------------------|
+| Target column | `reef_health` | `restoration_suitability` |
+| Number of classes | 4 | 3 |
+| Candidate algorithms | Logistic Regression, Random Forest, XGBoost | Logistic Regression, Random Forest, XGBoost |
+| Selected champion | **Logistic Regression** | **XGBoost** |
+| Selection metric | CV macro-F1 (5-fold) | CV macro-F1 (5-fold) |
+| CV folds | 5 | 5 |
+| Class weighting | Balanced | Balanced (LR, RF) |
+
+---
+
+## Model Performance
+
+Metrics from `models/evaluation_health.json` and `models/evaluation_restoration.json`.
+
+### Reef Health — Champion: Logistic Regression
+
+| Metric | Value |
+|--------|-------|
+| CV macro-F1 | 0.7612 |
+| CV balanced accuracy | 0.7776 |
+| Test macro-F1 | **0.7871** |
+| Test balanced accuracy | 0.8012 |
+| Test accuracy | 0.8193 |
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| healthy | 0.66 | 0.74 | 0.70 | 318 |
+| stressed | 0.94 | 0.86 | 0.90 | 1,726 |
+| bleached | 0.89 | 0.88 | 0.88 | 283 |
+| severely_degraded | 0.63 | 0.72 | 0.67 | 673 |
+
+### Restoration Suitability — Champion: XGBoost
+
+| Metric | Value |
+|--------|-------|
+| CV macro-F1 | 0.7913 |
+| CV balanced accuracy | 0.8016 |
+| Test macro-F1 | **0.8029** |
+| Test balanced accuracy | 0.8121 |
+| Test accuracy | 0.8277 |
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| suitable | 0.71 | 0.73 | 0.72 | 907 |
+| moderately_suitable | 0.90 | 0.87 | 0.89 | 1,798 |
+| unsuitable | 0.77 | 0.83 | 0.80 | 295 |
+
+> **Disclaimer:** These metrics were obtained using synthetic prototype data and do not measure real-world ecological validity. Quality gates require minimum CV macro-F1 of 0.70 (health) and 0.73 (restoration) for candidate promotion.
+
+---
+
+## MLflow Experiment Tracking and Registry
+
+All training runs are logged to an MLflow SQLite backend (`artifacts/mlruns.db`) with:
+
+- **Parameters:** algorithm hyperparameters, random seed, CV folds, split ratios
+- **Metrics:** CV macro-F1, CV balanced accuracy, test accuracy, test F1, per-class precision/recall
+- **Artifacts:** serialised model (joblib), evaluation JSON, confusion matrix, feature importance
+
+### Model Registry
+
+| Registered Model | Champion Algorithm | Version | CV macro-F1 | Alias |
+|------------------|--------------------|---------|-------------|-------|
+| `coralsense_reef_health` | Logistic Regression | 1 | 0.7612 | champion |
+| `coralsense_restoration_suitability` | XGBoost | 1 | 0.7913 | champion |
+
+> **Note on legacy identifiers:** The registered model names use the `coralsense_` prefix. This is a legacy internal identifier in the MLflow database and `params.yaml` configuration. The project identity is **Oceanographic**.
+
+### Promotion and Rollback
+
+- **Promotion** requires `--approve`, `--approver`, and `--reason` flags. Automatic promotion is prohibited.
+- **Rollback** moves the champion alias to a previous version without deleting any model version.
+- Model cards can be generated for any registered version.
+
+### MLflow UI
+
+The MLflow server UI is launched via Docker because the local Python 3.14 environment has an incompatibility with the MLflow server import path.
 
 ```bash
-# Lint and format check
-ruff check src/ tests/
-ruff format --check src/ tests/
-
-# Auto-fix lint issues
-ruff check --fix src/ tests/
-ruff format src/ tests/
-
-# Run all tests
-pytest
-
-# Run tests with coverage
-pytest --cov=src --cov-report=term-missing
-
-# Run only unit tests (fast)
-pytest -m unit
-
-# Run only integration tests
-pytest -m integration
-
-# Run a specific test file
-pytest tests/test_config.py -v
+make mlflow-ui          # Start on http://127.0.0.1:5000
+make mlflow-ui-stop     # Stop the container
 ```
 
 ---
@@ -256,17 +323,17 @@ The FastAPI inference service (`src/api/main.py`) exposes both champion models o
 uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Interactive docs available at `http://127.0.0.1:8000/docs` after startup.
+API documentation: http://127.0.0.1:8000/docs
 
 ### Endpoints
 
 | Method | Path | Description |
-|---|---|---|
+|--------|------|-------------|
 | `GET` | `/` | Project index and documentation links |
 | `GET` | `/health` | Liveness and model readiness probe |
 | `GET` | `/model-info` | Champion model metadata (safe fields only) |
-| `POST` | `/predict/reef-health` | Reef-health prediction for one observation |
-| `POST` | `/predict/restoration` | Restoration-suitability prediction for one observation |
+| `POST` | `/predict/reef-health` | Single reef-health prediction |
+| `POST` | `/predict/restoration` | Single restoration-suitability prediction |
 | `POST` | `/predict/both` | Both predictions for one observation |
 | `POST` | `/predict/batch` | Batch predictions (max 50 observations) |
 
@@ -309,8 +376,6 @@ curl -s -X POST http://127.0.0.1:8000/predict/both \
     },
     "confidence": 0.984728,
     "task": "health",
-    "registered_model_name": "coralsense_reef_health",
-    "model_version": "1",
     "model_alias": "champion",
     "synthetic_data_disclaimer": "Predictions generated by a model trained on synthetic data only. Do not use to guide real-world conservation decisions."
   },
@@ -323,464 +388,375 @@ curl -s -X POST http://127.0.0.1:8000/predict/both \
     },
     "confidence": 0.99188,
     "task": "restoration",
-    "registered_model_name": "coralsense_restoration_suitability",
-    "model_version": "1",
     "model_alias": "champion",
     "synthetic_data_disclaimer": "Predictions generated by a model trained on synthetic data only. Do not use to guide real-world conservation decisions."
   }
 }
 ```
 
-### Configuration via environment variables
+### Input validation
 
-| Variable | Default | Description |
-|---|---|---|
-| `CORALSENSE_HOST` | `127.0.0.1` | Bind host |
-| `CORALSENSE_PORT` | `8000` | Bind port |
-| `CORALSENSE_LOG_LEVEL` | `info` | Uvicorn log level |
-| `CORALSENSE_MAX_BATCH` | `50` | Maximum batch size |
-| `CORALSENSE_CORS_ORIGINS` | _(none)_ | Comma-separated allowed origins |
-
-### Security
-
-- No internal paths, tracebacks, or MLflow URIs are returned to clients.
-- No model registration or promotion occurs at runtime.
-- Preprocessors are used in transform-only mode (no `fit` calls).
-- Returns 503 (not 500) when models fail to load, allowing degraded-mode operation.
+All 16 inference features are required with domain-appropriate bounds. The API rejects NaN/Inf values, unknown regions, out-of-range values, and extra fields (including target labels). Invalid requests receive a 422 response with field-level error details. Unavailable models return 503.
 
 ---
 
-## Milestone Commands
+## Streamlit Dashboard
 
-Each command below corresponds to one project milestone.
-Run them in order after the milestone is implemented.
+The interactive dashboard provides ten pages for data exploration, prediction, and MLOps monitoring.
+
+| Page | Description |
+|------|-------------|
+| Home (`app.py`) | Project overview, champion model cards, synthetic-data disclaimer |
+| 1 — Overview | Project objectives, sonar vs environmental feature distinction |
+| 2 — Reef Map | Interactive Plotly OpenStreetMap scatter map with region filters |
+| 3 — Habitat Health | Health class distribution, box/violin plots, region breakdown |
+| 4 — Restoration Planning | Suitability distribution, feature comparisons, top suitable sites |
+| 5 — Predict | Sensor input form with live dual-task prediction via the API |
+| 6 — Model Performance | Algorithm comparison, CV F1 bar charts, per-class metrics |
+| 7 — MLOps Status | Pipeline milestone status, live champion metadata from the API |
+| 8 — Drift Monitoring | Feature, prediction, and confidence drift visualisation |
+| 9 — Governance | Model governance status and retraining workflow overview |
+
+### Launch
 
 ```bash
-# M2 — Generate synthetic data
-python -m src.data.generate_data
-
-# M3 — Validate schema
-python -m src.data.validate
-
-# M4 — Preprocess + feature engineering
-python -m src.data.preprocess
-python -m src.features.build_features
-
-# M5 — Train models (tracks to MLflow automatically)
-python -m src.models.train
-
-# M6 — Evaluate and register best model
-python -m src.models.evaluate
-python -m src.models.registry
-
-# M7 — Reproduce full DVC pipeline
-dvc repro
-
-# M8 — Run CI checks locally
-bash scripts/ci_check.sh
-
-# M9 — Start the FastAPI inference server
-uvicorn src.api.main:app --host 127.0.0.1 --port 8000
-
-# M10 — Start the Streamlit dashboard (requires FastAPI running first)
-# Terminal 1:
-uvicorn src.api.main:app --host 127.0.0.1 --port 8000
-# Terminal 2:
+# Requires the FastAPI service running on port 8000
 streamlit run src/dashboard/app.py
+```
 
-# M11 — Run drift monitoring (feature, prediction, confidence drift)
-python -m src.monitoring.run_drift                  # standard shift, with HTML reports
-python -m src.monitoring.run_drift --no-html        # faster, JSON summary only
-python -m src.monitoring.run_drift --shift-scale 0  # zero-shift baseline (no drift expected)
-python -m src.monitoring.run_drift --shift-scale 2  # stronger simulated degradation
+Dashboard URL: http://localhost:8501
 
-# M12 — Start all services via Docker Compose
-docker compose up --build
+The `CORALSENSE_API_URL` environment variable overrides the API base URL (default: `http://127.0.0.1:8000`).
 
-# M13 — Controlled retraining (run drift first to get a recommendation)
-python -m src.monitoring.run_drift --no-html        # produces reports/drift_summary.json
+---
 
-# Dry-run: validate labelled input and check retraining permission (no DB writes)
-python scripts/run_retraining.py \
-  --task health \
-  --input data/raw/observations.csv \
-  --drift-summary reports/drift_summary.json \
-  --dry-run
+## Local Setup
 
-# Full retrain + compare (registers challenger, writes comparison report; never promotes)
-python scripts/run_retraining.py \
-  --task health \
-  --input data/raw/observations.csv \
-  --drift-summary reports/drift_summary.json
+### Prerequisites
 
-# Promote challenger (requires explicit --approve, --approver, --reason)
-python -m src.models.promote \
-  --model coralsense_reef_health \
-  --challenger-version <VERSION> \
-  --approve \
-  --approver "Your Name" \
-  --reason "Challenger improves macro-F1 by 3 pp over champion"
+- Python >= 3.11 (tested on 3.12 and 3.14; CI uses 3.12)
+- Git
+- Docker + Docker Compose (optional, for containerised deployment)
 
-# Rollback (--dry-run to preview, then run without it)
-python -m src.models.rollback \
-  --model coralsense_reef_health \
-  --target-version 1 \
-  --approver "Your Name" \
-  --reason "Challenger underperforms on held-out reef transects" \
-  --dry-run
+### Installation
 
-# Generate a Markdown model card for any registered version
-python -m src.models.model_card \
-  --model coralsense_reef_health \
-  --version 1
+```bash
+git clone https://github.com/divya-m984/Oceanographic-reef-mlops-proj.git
+cd Oceanographic-reef-mlops-proj
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
+```
+
+Or use the Makefile shortcut:
+
+```bash
+make install
+```
+
+Optionally copy the environment template:
+
+```bash
+cp .env.example .env
 ```
 
 ---
 
-## Running Tests
+## Running the Complete Application
+
+### Native development mode (three terminals)
 
 ```bash
-# All tests
-pytest
+# Terminal 1 — MLflow UI (Docker, Python 3.12)
+make mlflow-ui
 
-# With verbose output and coverage
-pytest -v --cov=src --cov-report=term-missing --cov-report=html
-# HTML report: htmlcov/index.html
+# Terminal 2 — FastAPI inference service
+source .venv/bin/activate
+uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 
-# Exclude slow tests
-pytest -m "not slow"
+# Terminal 3 — Streamlit dashboard
+source .venv/bin/activate
+streamlit run src/dashboard/app.py
 ```
-
----
-
-## Docker
-
-**Prerequisites (run once after `dvc repro`):**
-
-```bash
-# Export champion models to a portable deployment bundle
-python scripts/export_champions.py
-
-# Verify bundle integrity (11 checks)
-python scripts/verify_deployment_bundle.py
-```
-
-```bash
-# Build and start all services
-docker compose up --build -d
-
-# Tail logs
-docker compose logs -f
-
-# Stop
-docker compose down
-
-# Stop and remove volumes
-docker compose down -v
-```
-
-Services after startup:
 
 | Service | URL |
-|---|---|
-| MLflow UI | http://localhost:5000 |
-| FastAPI docs | http://localhost:8000/docs |
-| Streamlit dashboard | http://localhost:8501 |
+|---------|-----|
+| MLflow UI | http://127.0.0.1:5000 |
+| API docs | http://127.0.0.1:8000/docs |
+| Dashboard | http://localhost:8501 |
 
-### MLflow UI — Python 3.14 compatibility note
-
-MLflow 3.14.0 cannot start directly under Python 3.14 because
-`mlflow/assistant/skill_installer.py` imports `Traversable` from
-`importlib.abc`, which was removed in Python 3.14 (moved to
-`importlib.resources.abc`).  See upstream issue
-[mlflow#24155](https://github.com/mlflow/mlflow/issues/24155).
-
-**Workaround:** use the pre-built Docker image (`Dockerfile.mlflow`), which
-runs Python 3.12 and is unaffected.
+### Docker Compose mode
 
 ```bash
-# Start MLflow UI only (Docker, Python 3.12)
-make mlflow-ui
+# 1. Export champion models to deployment bundles (required once)
+python scripts/export_champions.py
+python scripts/verify_deployment_bundle.py
+
+# 2. Build and start all services
+docker compose up --build -d
+
+# 3. Verify
+docker compose ps
+python scripts/demo.py verify   # submits a test prediction
+
+# 4. Stop
+docker compose down
+
+# Optional: run drift monitoring
+docker compose --profile drift run --rm drift
+```
+
+The `Makefile` also provides demo targets:
+
+```bash
+make demo           # preflight + start + verify
+make demo-stop      # stop all services
+```
+
+---
+
+## Testing and Code Quality
+
+```bash
+# Run the full test suite (1,000+ tests)
+make test
 # or
-bash scripts/start_mlflow.sh
+python -m pytest tests/ -q
 
-# Stop
-make mlflow-ui-stop
+# Lint
+make lint
 # or
-bash scripts/start_mlflow.sh stop
-```
+ruff check src/ tests/ scripts/
 
-`artifacts/mlruns.db` is mounted **read-only**; `docker/init_mlflow.sh` copies
-it to a writable named volume (`mlflow-runtime`) and rewrites host-absolute
-paths automatically.  The canonical database is never modified.
+# Format check
+make format-check
+# or
+ruff format --check src/ tests/ scripts/
+
+# Run the local CI-equivalent script
+make ci-check
+# or
+bash scripts/ci_check.sh
+
+# Read-only preflight system check
+make preflight
+
+# DVC pipeline validation (does not run training)
+dvc status
+dvc dag
+```
 
 ---
 
-## M13 — Controlled Retraining and Model Governance
+## CI/CD Architecture
 
-### Why unlabelled drift data cannot be used for retraining
+The GitHub Actions workflow (`.github/workflows/ci.yml`) runs five jobs on every push and pull request to `main` or `master`.
 
-The M11 Evidently drift pipeline generates a **shifted, unlabelled production window**
-(`data/production/`) to simulate data drift. This window contains sensor observations
-without ground-truth reef-health or restoration-suitability labels.
+```mermaid
+flowchart LR
+    CQ["Code Quality<br/>(ruff)"]
+    TS["Test Suite<br/>(pytest)"]
+    PV["Pipeline Validation<br/>(DVC structure)"]
+    SM["ML Smoke Test<br/>(500 rows)"]
+    BD["Package Build<br/>(wheel + sdist)"]
 
-Supervised learning requires labelled examples. Using unlabelled drift data for retraining
-would be scientifically invalid — there are no labels to learn from. The drift window's
-only role is to signal **when** retraining is warranted, not to supply training data.
-
-### Labelled-data contract
-
-`scripts/run_retraining.py` and `src/models/retrain.py` enforce the following rules before
-any model is trained:
-
-| Requirement | Detail |
-|---|---|
-| Both target columns present | `reef_health` (health task) and/or `restoration_suitability` (restoration task) must be non-null |
-| No NaN targets | Rows with missing labels are rejected outright |
-| Minimum row count | At least 200 labelled rows required (configurable in `params.yaml`) |
-| All classes present | All label classes must appear in the input (health: 4 classes, restoration: 3 classes) |
-| Minimum class count | Each class must have at least 5 examples |
-| Valid feature columns | Input must contain the expected sensor feature columns |
-| SHA-256 provenance | Input file hash is recorded in MLflow tags for audit purposes |
-| Retraining permission | Drift summary must recommend RETRAIN **or** a manual reason must be supplied |
-
-Attempting to pass the M11 production window (missing target columns) as retraining input
-raises a `ValueError` and exits with code 1.
-
-### Dry-run mode
-
-Pass `--dry-run` to validate the input and permission check without writing anything to
-the MLflow registry or filesystem:
-
-```bash
-python scripts/run_retraining.py \
-  --task health \
-  --input data/raw/observations.csv \
-  --drift-summary reports/drift_summary.json \
-  --dry-run
+    CQ --> TS
+    CQ --> PV
+    CQ --> SM
+    TS --> BD
+    SM --> BD
 ```
 
-Exit codes: `0` = validation passed, `1` = validation error, `3` = permission denied.
+| Job | What it does | Timeout |
+|-----|--------------|---------|
+| Code Quality | `ruff check` + `ruff format --check` | 10 min |
+| Test Suite | Full pytest suite with disposable MLflow DB | 30 min |
+| Pipeline Validation | `dvc dag`, DVC structure tests, isolated data round-trip | 10 min |
+| ML Smoke Test | Quick training on 500 synthetic rows; verifies predictions and metrics | 15 min |
+| Package Build | `python -m build`; uploads `dist/` artifact | 10 min |
 
-### Challenger training
+**What is intentionally excluded from CI:**
+- The full DVC pipeline (`dvc repro`)
+- Model registration or champion promotion
+- The canonical MLflow database (`artifacts/mlruns.db`)
+- Automated production deployment
 
-When run without `--dry-run`, the orchestrator:
-
-1. Validates the labelled input (8 checks above).
-2. Verifies retraining permission from the drift summary.
-3. Fits a fresh preprocessor on the **training split only** (no leakage from holdout).
-4. Trains all three algorithm variants (Logistic Regression, Random Forest, XGBoost)
-   using the same hyperparameter grid as M5.
-5. Selects the best challenger by CV macro-F1.
-6. Evaluates the challenger on the holdout split.
-7. Registers the challenger in MLflow **without** setting the `champion` alias.
-8. Immediately runs champion-challenger comparison and writes a JSON report.
-
-The champion alias is **never moved** by the retraining script.
-
-### Comparison outcomes
-
-`src/models/compare.py` applies four gates (thresholds configurable in `params.yaml`
-under `retraining.comparison`):
-
-| Outcome | Meaning |
-|---|---|
-| `eligible_for_promotion` | Challenger passes all gates; human may promote |
-| `review_required` | Challenger meets minimum quality but does not clearly beat the champion |
-| `reject` | Challenger regresses on macro-F1, balanced accuracy, or per-class recall |
-
-The comparison outcome is printed to stdout and saved to
-`reports/comparison_<model>_<timestamp>.json`. **Promotion is never triggered
-automatically**, regardless of outcome.
-
-### Explicit promotion
-
-Promotion requires three mandatory arguments and is blocked unless the comparison
-outcome is `eligible_for_promotion` (or `--force` is passed for `review_required` cases):
-
-```bash
-python -m src.models.promote \
-  --model coralsense_reef_health \
-  --challenger-version <VERSION> \
-  --approve \
-  --approver "Your Name" \
-  --reason "Challenger improves macro-F1 by 3 pp and passes all quality gates"
-```
-
-Omitting `--approve`, `--approver`, or `--reason` raises an error. A promotion receipt
-(`reports/promotion_receipt_<timestamp>.json`) is written on success.
-
-### Rollback
-
-Rolling back moves the `champion` alias to a previous version without deleting any
-model version:
-
-```bash
-# Preview what would happen
-python -m src.models.rollback \
-  --model coralsense_reef_health \
-  --target-version 1 \
-  --approver "Your Name" \
-  --reason "Challenger underperforms on held-out reef transects" \
-  --dry-run
-
-# Execute rollback
-python -m src.models.rollback \
-  --model coralsense_reef_health \
-  --target-version 1 \
-  --approver "Your Name" \
-  --reason "Challenger underperforms on held-out reef transects"
-```
-
-A rollback receipt (`reports/rollback_receipt_<timestamp>.json`) is written on success.
-
-### Model cards
-
-Generate a Markdown model card for any registered version:
-
-```bash
-python -m src.models.model_card \
-  --model coralsense_reef_health \
-  --version 1
-# Saved to reports/model_cards/coralsense_reef_health_v1.md
-```
-
-### Approval requirements summary
-
-| Action | Required flags |
-|---|---|
-| Retrain + compare | `--task`, `--input` (drift summary or `--reason`) |
-| Dry-run only | add `--dry-run` |
-| Promote challenger | `--approve`, `--approver`, `--reason` |
-| Force-promote `review_required` | add `--force` |
-| Rollback | `--target-version`, `--approver`, `--reason` |
-
-### Synthetic-data limitation
-
-All metrics reported in comparison reports, promotion receipts, and model cards reflect
-performance on the **synthetic** dataset. They do not indicate real-world
-coral reef prediction accuracy. Replace `src/data/generate_data.py` with a real sensor
-ingestion module and supply genuinely labelled field data before drawing any ecological
-conclusions.
+CI uses Python 3.12 and `MLFLOW_TRACKING_URI=sqlite:///ci_mlruns.db` to isolate all runs from the canonical database.
 
 ---
 
-## Classroom Demo
+## Monitoring and Drift
+
+Drift monitoring uses Evidently and statistical tests to detect distribution shifts between a reference window and a simulated production window.
+
+| Drift Type | Method | Description |
+|------------|--------|-------------|
+| Feature drift | Evidently `DataDriftPreset` (Wasserstein distance) | Detects shifts in individual feature distributions |
+| Prediction drift | Chi-squared test (`chi2_contingency`) | Detects changes in predicted class distributions |
+| Confidence drift | Kolmogorov-Smirnov test | Detects changes in model confidence score distributions |
+
+**Current implementation:** The production window is **simulated** by applying controlled synthetic shifts to sampled observations. At the default shift scale (`shift_scale=1.0`), four features exhibit significant drift, and the system recommends retraining.
 
 ```bash
-make preflight          # pre-demo system check
-make export-models      # export champion bundles
-make drift              # generate drift report
-python scripts/demo.py start    # start full Docker stack
-python scripts/demo.py verify   # submit test prediction
-python scripts/demo.py stop     # stop cleanly
+# Generate drift report
+make drift
+# or
+python -m src.monitoring.run_drift --no-html
+
+# With different shift intensities
+python -m src.monitoring.run_drift --shift-scale 0     # no shift (baseline)
+python -m src.monitoring.run_drift --shift-scale 2.0   # stronger shift
 ```
 
-See [`docs/demo_guide.md`](docs/demo_guide.md) for the full 8–12 minute demonstration plan.
+The drift summary (`reports/drift_summary.json`) includes per-column drift status, prediction distribution changes, confidence deltas, and a retraining recommendation.
 
 ---
 
-## MLOps Maturity
+## Model Governance
 
-| Level | Demonstrated capability |
-|---|---|
-| **Level 0** | `make test` (910 tests), `dvc repro`, `make lint` |
-| **Level 1** | GitHub Actions CI (5 jobs, every push) |
-| **Level 2** | `docker compose up` deploys all services; FastAPI + Streamlit |
-| **Level 3** | Evidently drift monitoring, RETRAIN recommendation, governed challenger training, explicit approval promotion, rollback with receipt |
+Oceanographic enforces a governed model lifecycle. Automatic promotion is prohibited at every stage.
+
+```mermaid
+flowchart TB
+    TRIGGER["Drift recommendation<br/>or new labelled data"]
+    RETRAIN["Challenger Training<br/>(retrain.py)"]
+    COMPARE["Champion vs Challenger<br/>(compare.py)"]
+    REJECT["Reject"]
+    REVIEW["Review Required"]
+    ELIGIBLE["Eligible for Promotion"]
+    PROMOTE["Explicit Promotion<br/>(--approve --approver --reason)"]
+    ROLLBACK["Rollback Capability<br/>(rollback.py)"]
+
+    TRIGGER --> RETRAIN --> COMPARE
+    COMPARE --> REJECT
+    COMPARE --> REVIEW
+    COMPARE --> ELIGIBLE
+    ELIGIBLE --> PROMOTE
+    PROMOTE --> ROLLBACK
+```
+
+**Key rules:**
+- Retraining requires **labelled data** — unlabelled production windows are rejected
+- The retraining script registers challengers but **never sets the champion alias**
+- Promotion requires `--approve`, `--approver`, and `--reason` flags
+- Comparison outcomes: `reject`, `review_required`, or `eligible_for_promotion`
+- Rollback moves the champion alias without deleting any model version
+- All promotion and rollback actions generate auditable JSON receipts
 
 ---
 
 ## Project Structure
 
 ```
-coralsense-mlops/
+Oceanographic-reef-mlops-proj/
 ├── README.md
-├── Makefile                  # Safe build/test/demo targets (M14)
-├── CHANGELOG.md              # Milestone history (M14)
-├── requirements.txt          # Full dependency list
-├── requirements-dev.txt      # M1 minimal deps (pytest, ruff, pyyaml)
-├── pyproject.toml            # Build config, pytest, ruff settings
-├── params.yaml               # All tunable knobs (single source of truth)
-├── .env.example              # Environment variable template
-├── dvc.yaml                  # Pipeline DAG (M7 — 7 stages)
-├── docker-compose.yml        # Container orchestration (M12)
-├── data/
-│   ├── raw/                  # Generated observations (DVC-tracked)
-│   ├── processed/            # Train/test splits
-│   ├── reference/            # Evidently reference baseline
-│   └── production/           # Shifted data for drift demo
-├── models/                   # Serialised model artifacts
-├── notebooks/                # Exploratory analysis
-├── reports/                  # Evidently HTML reports, plots
-├── artifacts/                # MLflow tracking store
-├── scripts/
-│   ├── preflight.py          # Read-only system check (M14)
-│   ├── demo.py               # Demo orchestrator start/status/verify/stop (M14)
-│   ├── collect_evidence.py   # Generates reports/project_manifest.json (M14)
-│   ├── ci_check.sh           # Local CI equivalent (M8)
-│   ├── ci_smoke_test.py      # ML smoke test (M8)
-│   ├── ci_validate_pipeline.py # DVC pipeline validation (M8)
-│   ├── export_champions.py   # Export deployment bundles (M12)
-│   ├── verify_deployment_bundle.py # Bundle integrity checks (M12)
-│   └── run_retraining.py     # Retrain + compare orchestrator (M13)
-├── docs/
-│   ├── architecture.md       # System architecture (M14)
-│   ├── course_evidence.md    # Course activities evidence (M14)
-│   ├── demo_guide.md         # 8-12 min classroom demo guide (M14)
-│   └── progress.md           # Milestone progress log
+├── Makefile                     # Build, test, demo, and service targets
+├── CHANGELOG.md                 # Milestone history
+├── pyproject.toml               # Build config, pytest, ruff settings
+├── requirements.txt             # Full dependency list
+├── params.yaml                  # Single source of truth for all parameters
+├── dvc.yaml                     # Seven-stage pipeline DAG
+├── docker-compose.yml           # Four-service container orchestration
+├── Dockerfile.api               # FastAPI multi-stage image
+├── Dockerfile.dashboard         # Streamlit multi-stage image
+├── Dockerfile.mlflow            # MLflow tracking server image
+├── .github/workflows/ci.yml    # GitHub Actions CI pipeline
+├── .env.example                 # Environment variable template
 ├── src/
-│   ├── config.py             # Central config (paths, params, logging)
-│   ├── data/
-│   │   ├── generate_data.py  # Synthetic data generator (M2)
-│   │   ├── validate.py       # Pandera schema validation (M3)
-│   │   └── preprocess.py     # Preprocessing pipeline (M4)
-│   ├── features/
-│   │   └── build_features.py # Feature engineering (M4)
-│   ├── models/
-│   │   ├── train.py          # Model training + MLflow (M5)
-│   │   ├── evaluate.py       # Metrics + confusion matrix (M5)
-│   │   ├── predict.py        # Inference helpers (M6)
-│   │   ├── registry.py       # MLflow model registry (M6)
-│   │   ├── retrain.py        # Challenger training + input validation (M13)
-│   │   ├── compare.py        # Champion-challenger comparison engine (M13)
-│   │   ├── promote.py        # Explicit promotion with approval guard (M13)
-│   │   ├── rollback.py       # Champion rollback with dry-run (M13)
-│   │   └── model_card.py     # Markdown model card generator (M13)
-│   ├── monitoring/
-│   │   ├── drift.py          # Evidently drift report (M10)
-│   │   └── performance.py    # Production performance tracking (M10)
-│   ├── api/
-│   │   ├── main.py           # FastAPI app (M9)
-│   │   ├── schemas.py        # Pydantic request/response models (M9)
-│   │   └── model_loader.py   # Model loading singleton (M9)
-│   └── dashboard/
-│       ├── app.py            # Streamlit entry point (M10)
-│       └── pages/            # Multi-page dashboard pages (M10)
-└── tests/
-    ├── test_config.py        # M1 — config unit tests
-    ├── test_generate_data.py # M2
-    ├── test_validate.py      # M3
-    ├── test_preprocess.py    # M4
-    ├── test_models.py        # M5
-    ├── test_api.py           # M9
-    └── test_retraining.py    # M13 — 70 tests (challenger, compare, promote, rollback)
+│   ├── config.py                # Central config (paths, params, logging)
+│   ├── data/                    # Data generation, validation, preprocessing
+│   ├── features/                # Derived feature engineering
+│   ├── models/                  # Training, evaluation, registry, prediction,
+│   │                            #   retraining, comparison, promotion, rollback
+│   ├── monitoring/              # Drift detection and production simulation
+│   ├── api/                     # FastAPI service (schemas, loader, endpoints)
+│   └── dashboard/               # Streamlit app and 9 pages
+├── data/
+│   ├── raw/                     # Generated observations (DVC-tracked)
+│   ├── processed/               # Train/test splits and preprocessors
+│   ├── reference/               # Drift reference window
+│   └── production/              # Simulated production window
+├── models/                      # Serialised model and evaluation artifacts
+├── artifacts/                   # MLflow SQLite database
+├── reports/                     # Metrics, drift summaries, governance receipts
+├── scripts/                     # CI, demo, preflight, export, retraining CLIs
+├── docker/                      # Container init scripts
+├── docs/                        # Architecture, demo guide, data dictionary
+└── tests/                       # 1,000+ automated tests
 ```
 
 ---
 
-## Scientific Assumptions
+## Technology Stack
 
-All assumptions baked into the synthetic data generator are documented in
-`src/data/generate_data.py`. Key rules:
+| Category | Technologies |
+|----------|-------------|
+| ML / Data | Python, NumPy, Pandas, scikit-learn, XGBoost, SciPy, SHAP |
+| MLOps | MLflow 3.x, DVC 3.x, Evidently 0.7, Pandera |
+| API | FastAPI, Uvicorn, Pydantic v2 |
+| Dashboard | Streamlit, Plotly |
+| Testing | pytest, ruff |
+| Deployment | Docker, Docker Compose |
+| CI/CD | GitHub Actions |
 
-- Higher `water_temperature_c` (>30 °C) correlates with bleaching stress.
-- Lower `ph` (<8.0) and higher `turbidity_ntu` push labels toward degraded.
-- Higher `coral_cover_percentage` and `hard_substrate_percentage` favour restoration suitability.
-- `bleaching_percentage` > 40 % and `disease_percentage` > 15 % indicate severely degraded reef.
-- Controlled Gaussian noise (`noise_scale` in params.yaml) prevents unrealistically perfect accuracy.
-- A fixed random seed (`random_seed` in params.yaml) ensures full reproducibility.
+---
 
-None of these thresholds replace expert ecological survey data.
-Replace `src/data/generate_data.py` with a real sensor ingestion module when
-physical data becomes available.
+## Limitations
+
+- **Synthetic dataset** — All 15,000 observations are computer-generated. Feature distributions and label thresholds are approximations, not field-calibrated ecological models.
+- **No live sonar hardware integration** — The system does not connect to real sonar instruments, ROVs, AUVs, or buoy sensors.
+- **No marine-scientist field validation** — No predictions have been reviewed or validated by domain experts.
+- **No DVC remote configured** — Pipeline artifacts are stored locally only. CI uses isolated temporary data instead of `dvc pull`.
+- **Local prototype deployment** — Docker Compose runs on `localhost`; no cloud hosting, TLS, or authentication is configured.
+- **Predictions must not be used for real restoration decisions** — This is a research and educational prototype.
+- **Legacy identifiers** — MLflow registered model names and some internal paths use the `coralsense_` prefix from an earlier project phase. These are database-level identifiers that persist in `artifacts/mlruns.db` and `params.yaml`.
+
+---
+
+## Future Work
+
+- Real sonar and environmental sensor data ingestion (AUV/ROV or moored buoy telemetry)
+- Time-series and spatial modelling (seasonal cycles, reef transect gradients)
+- Field validation with expert-labelled datasets from marine biologists
+- Cloud object storage with DVC remote (S3, GCS, or Azure Blob)
+- Secure hosted deployment with TLS, authentication, and role-based access
+- Continuous data collection and automated drift monitoring triggers
+- Alerting on drift events and model degradation
+- Explainability (SHAP dashboards) and uncertainty estimation for predictions
+- Integration with reef conservation databases and GIS platforms
+
+---
+
+## Responsible-Use Notice
+
+> **This system is a research and educational prototype.** It is designed to demonstrate MLOps principles and software engineering practices in a marine science context. All data is synthetic. All predictions are generated by models trained on synthetic data. No output from this system should be interpreted as scientific advice, ecological assessment, or guidance for real-world coral reef conservation, restoration planning, or marine management decisions.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`docs/architecture.md`](docs/architecture.md) | Full system architecture |
+| [`docs/data_dictionary.md`](docs/data_dictionary.md) | Dataset column reference and label generation rules |
+| [`docs/demo_guide.md`](docs/demo_guide.md) | 8–12 minute classroom demonstration guide |
+| [`docs/course_evidence.md`](docs/course_evidence.md) | Course activity evidence |
+| [`docs/progress.md`](docs/progress.md) | Milestone progress log |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history (M1–M14) |
+| [`params.yaml`](params.yaml) | All tunable parameters |
+
+---
+
+## License
+
+The `pyproject.toml` declares an MIT license, but no `LICENSE` file currently exists in the repository root. The licensing terms should be confirmed by the repository owner before reuse.
+
+---
+
+## Attribution
+
+Repository: [divya-m984/Oceanographic-reef-mlops-proj](https://github.com/divya-m984/Oceanographic-reef-mlops-proj)
