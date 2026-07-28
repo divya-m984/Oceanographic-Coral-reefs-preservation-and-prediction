@@ -1,0 +1,147 @@
+{
+  "generated_at": "2026-07-28T07:10:36.635126+00:00",
+  "shift_scale": 1.0,
+  "reference_n": 1500,
+  "production_n": 1500,
+  "drift_threshold": 0.1,
+  "feature_drift": {
+    "drifted_count": 4,
+    "total_columns": 15,
+    "drifted_share": 0.2667,
+    "per_column": {
+      "depth_m": {
+        "drifted": true,
+        "p_value": 0.035469,
+        "method": "Wasserstein distance (normed)"
+      },
+      "water_temperature_c": {
+        "drifted": false,
+        "p_value": 1.29312,
+        "method": "Wasserstein distance (normed)"
+      },
+      "ph": {
+        "drifted": true,
+        "p_value": 0.041717,
+        "method": "Wasserstein distance (normed)"
+      },
+      "salinity_ppt": {
+        "drifted": true,
+        "p_value": 0.048994,
+        "method": "Wasserstein distance (normed)"
+      },
+      "dissolved_oxygen_mg_l": {
+        "drifted": true,
+        "p_value": 0.053942,
+        "method": "Wasserstein distance (normed)"
+      },
+      "turbidity_ntu": {
+        "drifted": false,
+        "p_value": 1.031157,
+        "method": "Wasserstein distance (normed)"
+      },
+      "light_intensity": {
+        "drifted": true,
+        "p_value": 0.051402,
+        "method": "Wasserstein distance (normed)"
+      },
+      "current_speed_m_s": {
+        "drifted": true,
+        "p_value": 0.042542,
+        "method": "Wasserstein distance (normed)"
+      },
+      "sonar_backscatter": {
+        "drifted": true,
+        "p_value": 0.022682,
+        "method": "Wasserstein distance (normed)"
+      },
+      "rugosity_index": {
+        "drifted": true,
+        "p_value": 0.028921,
+        "method": "Wasserstein distance (normed)"
+      },
+      "hard_substrate_percentage": {
+        "drifted": true,
+        "p_value": 0.023941,
+        "method": "Wasserstein distance (normed)"
+      },
+      "acoustic_complexity_index": {
+        "drifted": true,
+        "p_value": 0.057651,
+        "method": "Wasserstein distance (normed)"
+      },
+      "coral_cover_percentage": {
+        "drifted": false,
+        "p_value": 0.979021,
+        "method": "Wasserstein distance (normed)"
+      },
+      "bleaching_percentage": {
+        "drifted": false,
+        "p_value": 0.673655,
+        "method": "Wasserstein distance (normed)"
+      },
+      "disease_percentage": {
+        "drifted": true,
+        "p_value": 0.067821,
+        "method": "Wasserstein distance (normed)"
+      }
+    }
+  },
+  "prediction_drift": {
+    "health": {
+      "drifted": true,
+      "p_value": 0.0,
+      "statistic": 914.8388,
+      "method": "chi2",
+      "reference_distribution": {
+        "healthy": 0.558,
+        "stressed": 0.2407,
+        "bleached": 0.116,
+        "severely_degraded": 0.0853
+      },
+      "current_distribution": {
+        "healthy": 0.0573,
+        "stressed": 0.392,
+        "bleached": 0.3667,
+        "severely_degraded": 0.184
+      }
+    },
+    "restoration": {
+      "drifted": true,
+      "p_value": 0.0,
+      "statistic": 279.7565,
+      "method": "chi2",
+      "reference_distribution": {
+        "suitable": 0.5933,
+        "moderately_suitable": 0.3167,
+        "unsuitable": 0.09
+      },
+      "current_distribution": {
+        "suitable": 0.2913,
+        "moderately_suitable": 0.5267,
+        "unsuitable": 0.182
+      }
+    }
+  },
+  "confidence_drift": {
+    "health": {
+      "drifted": true,
+      "p_value": 0.0,
+      "statistic": 0.2953,
+      "method": "ks",
+      "mean_reference": 0.8181,
+      "mean_current": 0.7375,
+      "delta": -0.0806
+    },
+    "restoration": {
+      "drifted": true,
+      "p_value": 0.0,
+      "statistic": 0.292,
+      "method": "ks",
+      "mean_reference": 0.8805,
+      "mean_current": 0.8035,
+      "delta": -0.077
+    }
+  },
+  "recommendation": "RETRAIN RECOMMENDED: Significant feature drift and prediction-distribution drift detected. The current data distribution has moved away from the training distribution. Schedule model retraining on a representative dataset that includes the new distribution.",
+  "synthetic_data_disclaimer": "All windows used in CoralSense drift monitoring are based on SYNTHETIC data. Results must NOT be used to guide actual marine conservation decisions."
+}

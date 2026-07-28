@@ -1,4 +1,4 @@
-# dvc.yaml — CoralSense MLOps pipeline DAG (M7)
+# dvc.yaml — Oceanographic MLOps pipeline DAG
 #
 # Run with:
 #   dvc repro              # reproduce all changed stages
@@ -15,8 +15,9 @@
 # - The MLflow database (artifacts/mlruns.db) is NOT a DVC output; it is
 #   managed exclusively by MLflow to avoid unnecessary pipeline invalidation.
 # - The register_candidate stage registers a new model version but does NOT
-#   promote the champion alias.  Champion promotion remains a controlled
-#   manual step via:  python -m src.models.registry --promote
+#   promote the champion alias.  Champion promotion is a controlled governance
+#   step via:  python -m src.models.promote --model <name> --version <v>
+#              --comparison-report <json> --approve --approver <name> --reason <text>
 
 stages:
 
