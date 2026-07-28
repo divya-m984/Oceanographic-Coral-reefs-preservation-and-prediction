@@ -40,6 +40,8 @@ help:
 	@echo "    verify-models    Verify deployment bundle integrity (11 checks)"
 	@echo ""
 	@echo "  Services (local, no Docker)"
+	@echo "    mlflow-ui        Start MLflow UI via Docker on :5000 (Python 3.14 workaround)"
+	@echo "    mlflow-ui-stop   Stop the MLflow Docker container"
 	@echo "    api              Start FastAPI inference service on :8000"
 	@echo "    dashboard        Start Streamlit dashboard on :8501"
 	@echo "    drift            Generate drift report (reports/drift_summary.json)"
@@ -109,6 +111,20 @@ verify-models:
 	$(PYTHON) scripts/verify_deployment_bundle.py
 
 # ── Services (local) ───────────────────────────────────────────────────────────
+
+# NOTE: The MLflow server cannot run directly under Python 3.14 because
+# mlflow/assistant/skill_installer.py uses `from importlib.abc import Traversable`,
+# which was removed in Python 3.14 (upstream: github.com/mlflow/mlflow/issues/24155).
+# The mlflow-ui target launches the pre-built Docker image (Python 3.12) instead.
+.PHONY: mlflow-ui
+mlflow-ui:
+	@echo "Starting MLflow UI via Docker (Python 3.12) on http://127.0.0.1:5000"
+	@bash scripts/start_mlflow.sh start
+
+.PHONY: mlflow-ui-stop
+mlflow-ui-stop:
+	@bash scripts/start_mlflow.sh stop
+
 .PHONY: api
 api:
 	@echo "Starting FastAPI on http://127.0.0.1:8000  (Ctrl-C to stop)"
