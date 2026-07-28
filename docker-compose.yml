@@ -55,7 +55,7 @@ services:
       # Writable named volume for the runtime DB copy
       - mlflow-runtime:/mlflow-runtime
     ports:
-      - "${MLFLOW_PORT:-5000}:5000"
+      - "127.0.0.1:${MLFLOW_PORT:-5000}:5000"
     restart: unless-stopped
     healthcheck:
       test:

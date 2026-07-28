@@ -487,6 +487,33 @@ Services after startup:
 | FastAPI docs | http://localhost:8000/docs |
 | Streamlit dashboard | http://localhost:8501 |
 
+### MLflow UI — Python 3.14 compatibility note
+
+MLflow 3.14.0 cannot start directly under Python 3.14 because
+`mlflow/assistant/skill_installer.py` imports `Traversable` from
+`importlib.abc`, which was removed in Python 3.14 (moved to
+`importlib.resources.abc`).  See upstream issue
+[mlflow#24155](https://github.com/mlflow/mlflow/issues/24155).
+
+**Workaround:** use the pre-built Docker image (`Dockerfile.mlflow`), which
+runs Python 3.12 and is unaffected.
+
+```bash
+# Start MLflow UI only (Docker, Python 3.12)
+make mlflow-ui
+# or
+bash scripts/start_mlflow.sh
+
+# Stop
+make mlflow-ui-stop
+# or
+bash scripts/start_mlflow.sh stop
+```
+
+`artifacts/mlruns.db` is mounted **read-only**; `docker/init_mlflow.sh` copies
+it to a writable named volume (`mlflow-runtime`) and rewrites host-absolute
+paths automatically.  The canonical database is never modified.
+
 ---
 
 ## M13 — Controlled Retraining and Model Governance

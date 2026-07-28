@@ -509,3 +509,72 @@ class TestComposeports:
         ports = compose["services"]["mlflow"].get("ports", [])
         port_strs = [str(p) for p in ports]
         assert any("5000" in p for p in port_strs)
+
+    def test_mlflow_port_localhost_only(self):
+        """MLflow must bind to 127.0.0.1 on the host, not 0.0.0.0."""
+        compose_text = _COMPOSE.read_text()
+        assert "127.0.0.1:" in compose_text, (
+            "MLflow port mapping must use 127.0.0.1 to avoid exposing on all interfaces"
+        )
+
+    def test_mlflow_port_not_exposed_on_all_interfaces(self, compose):
+        """Port mapping must not resolve to 0.0.0.0 (bare port or missing host IP)."""
+        ports = compose["services"]["mlflow"].get("ports", [])
+        for port_spec in ports:
+            spec = str(port_spec)
+            if "5000" in spec:
+                assert spec.startswith("127.0.0.1:"), (
+                    f"MLflow port must be bound to 127.0.0.1, got: {spec}"
+                )
+
+
+# ---------------------------------------------------------------------------
+# MLflow launcher script
+# ---------------------------------------------------------------------------
+
+_START_MLFLOW = _ROOT / "scripts" / "start_mlflow.sh"
+
+
+class TestStartMlflowScript:
+    @pytest.fixture(autouse=True)
+    def _load_script(self):
+        self.text = _START_MLFLOW.read_text()
+
+    def test_script_exists(self):
+        assert _START_MLFLOW.exists()
+
+    def test_script_is_executable_or_invoked_via_bash(self):
+        """Either chmod +x or invoked via 'bash scripts/...'."""
+        makefile = (_ROOT / "Makefile").read_text()
+        assert "bash scripts/start_mlflow.sh" in makefile
+
+    def test_start_action(self):
+        assert "start)" in self.text
+
+    def test_stop_action(self):
+        assert "stop)" in self.text
+
+    def test_status_action(self):
+        assert "status)" in self.text
+
+    def test_logs_action(self):
+        assert "logs)" in self.text
+
+    def test_uses_docker_compose(self):
+        assert "docker compose" in self.text
+
+    def test_targets_mlflow_service_only(self):
+        """Launcher must only start the mlflow service, not all services."""
+        assert "up -d mlflow" in self.text
+
+    def test_health_wait_loop(self):
+        assert "127.0.0.1:5000" in self.text
+
+    def test_localhost_url_advertised(self):
+        assert "http://127.0.0.1:5000" in self.text
+
+    def test_uses_canonical_db_path(self):
+        """Launcher relies on docker-compose.yml which mounts artifacts/mlruns.db."""
+        compose_text = _COMPOSE.read_text()
+        assert "artifacts" in compose_text
+        assert "mlruns.db" in compose_text or "mlruns" in compose_text
