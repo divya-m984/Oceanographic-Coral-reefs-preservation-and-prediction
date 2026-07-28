@@ -5,8 +5,8 @@ stages:
     deps:
     - path: src/config.py
       hash: md5
-      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
-      size: 10549
+      md5: 94e78dd5d87b5e9e50147d9cdfb1f50c
+      size: 12159
     - path: src/data/generate_data.py
       hash: md5
       md5: 0b7fe84faf0f76c76d5a1eca539d1841
@@ -35,8 +35,8 @@ stages:
       size: 2471475
     - path: src/config.py
       hash: md5
-      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
-      size: 10549
+      md5: 94e78dd5d87b5e9e50147d9cdfb1f50c
+      size: 12159
     - path: src/data/validate.py
       hash: md5
       md5: 76a4f56ee76d9afdf705067b841e7541
@@ -56,8 +56,8 @@ stages:
       size: 2471475
     - path: src/config.py
       hash: md5
-      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
-      size: 10549
+      md5: 94e78dd5d87b5e9e50147d9cdfb1f50c
+      size: 12159
     - path: src/data/preprocess.py
       hash: md5
       md5: 07a5e48953d69bafcaa35ee89cf55835
@@ -119,8 +119,8 @@ stages:
       nfiles: 11
     - path: src/config.py
       hash: md5
-      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
-      size: 10549
+      md5: 94e78dd5d87b5e9e50147d9cdfb1f50c
+      size: 12159
     - path: src/models/evaluate.py
       hash: md5
       md5: 42105386aea1fe9555b39bfa685bdf74
@@ -203,8 +203,8 @@ stages:
       size: 8901
     - path: src/config.py
       hash: md5
-      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
-      size: 10549
+      md5: 94e78dd5d87b5e9e50147d9cdfb1f50c
+      size: 12159
     - path: src/models/run_evaluate.py
       hash: md5
       md5: d7482fc0a69561d31697106c5b608ae8
@@ -239,8 +239,8 @@ stages:
       size: 447
     - path: src/config.py
       hash: md5
-      md5: 17ee3b0ea327142fa3933f4f1d6fddbc
-      size: 10549
+      md5: 94e78dd5d87b5e9e50147d9cdfb1f50c
+      size: 12159
     - path: src/models/registry.py
       hash: md5
       md5: 9d2edc01325631028176ad00b9afd2e6
@@ -254,3 +254,62 @@ stages:
       hash: md5
       md5: 24d59c552b5f34dd37098e9793e63d3a
       size: 485
+  run_drift:
+    cmd: .venv/bin/python -m src.monitoring.run_drift --no-html
+    deps:
+    - path: data/processed/preprocessor_health.joblib
+      hash: md5
+      md5: 18684c9427b6ddd872d74d2acf50d792
+      size: 5256
+    - path: data/processed/preprocessor_restoration.joblib
+      hash: md5
+      md5: 1405b17a7a671cbb1e512263a099c282
+      size: 5256
+    - path: data/raw/observations.csv
+      hash: md5
+      md5: be0baa5c1d40ac25de25ff7235467911
+      size: 2471475
+    - path: models/best_model_health.joblib
+      hash: md5
+      md5: b0cf91129f26ba2378b2a3fa5b0acdfd
+      size: 2704
+    - path: models/best_model_restoration.joblib
+      hash: md5
+      md5: b971971c63443d837f6a033a13d82630
+      size: 3269590
+    - path: src/config.py
+      hash: md5
+      md5: 94e78dd5d87b5e9e50147d9cdfb1f50c
+      size: 12159
+    - path: src/monitoring/drift.py
+      hash: md5
+      md5: 5be1f4aa6c4345540403efde55e73f3f
+      size: 14079
+    - path: src/monitoring/generate_production.py
+      hash: md5
+      md5: b47f8b6ab2a9d6cd318ab019c5f66d86
+      size: 7594
+    - path: src/monitoring/run_drift.py
+      hash: md5
+      md5: 23551478d47cf302bb752f96fb044847
+      size: 11031
+    params:
+      params.yaml:
+        base.random_seed: 42
+        monitoring.drift_threshold: 0.1
+        monitoring.production_n: 1500
+        monitoring.reference_n: 1500
+        monitoring.shift_scale: 1.0
+    outs:
+    - path: data/production/production.csv
+      hash: md5
+      md5: c4bd4d2323341c277a483548a5808d9f
+      size: 225716
+    - path: data/reference/reference.csv
+      hash: md5
+      md5: 8a96b1723f0cc2f7d9823afdea026eb8
+      size: 215123
+    - path: reports/drift_summary.json
+      hash: md5
+      md5: fb628ba353d5611d7dd1d3b3fe10f647
+      size: 4168
