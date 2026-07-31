@@ -28,7 +28,7 @@ httpx>=0.27          # FastAPI test client dependency
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
 streamlit>=1.40
-plotly>=6.0
+plotly>=5.10,<6
 folium>=0.19
 streamlit-folium>=0.22
 
