@@ -23,7 +23,7 @@ stages:
 
   # ── M2 ────────────────────────────────────────────────────────────────────
   generate:
-    cmd: .venv/bin/python -m src.data.generate_data
+    cmd: python -m src.data.generate_data
     desc: "Generate synthetic coral reef observations from documented statistical rules."
     deps:
       - src/data/generate_data.py
@@ -38,7 +38,7 @@ stages:
 
   # ── M3 ────────────────────────────────────────────────────────────────────
   validate:
-    cmd: .venv/bin/python -m src.data.validate
+    cmd: python -m src.data.validate
     desc: "Validate the generated dataset against the Pandera schema. Stops the pipeline on failure."
     deps:
       - src/data/validate.py
@@ -49,7 +49,7 @@ stages:
 
   # ── M4 ────────────────────────────────────────────────────────────────────
   preprocess:
-    cmd: .venv/bin/python -m src.data.preprocess --input data/raw/observations_validated.csv
+    cmd: python -m src.data.preprocess --input data/raw/observations_validated.csv
     desc: "Stratified train/test split, feature engineering, and ColumnTransformer fitting."
     deps:
       - src/data/preprocess.py
@@ -65,7 +65,7 @@ stages:
 
   # ── M5 ────────────────────────────────────────────────────────────────────
   train:
-    cmd: .venv/bin/python -m src.models.train --task all
+    cmd: python -m src.models.train --task all
     desc: "Train LR/RF/XGBoost for both tasks; select best by CV macro-F1; log to MLflow."
     deps:
       - src/models/train.py
@@ -85,7 +85,7 @@ stages:
 
   # ── M7 evaluate ───────────────────────────────────────────────────────────
   evaluate:
-    cmd: .venv/bin/python -m src.models.run_evaluate
+    cmd: python -m src.models.run_evaluate
     desc: "Extract key metrics from evaluation JSONs into a single DVC metrics file."
     deps:
       - src/models/run_evaluate.py
@@ -98,7 +98,7 @@ stages:
 
   # ── M7 register_candidate ─────────────────────────────────────────────────
   register_candidate:
-    cmd: .venv/bin/python -m src.models.run_register_candidate
+    cmd: python -m src.models.run_register_candidate
     desc: "Register best models as MLflow candidates. Champion alias is NOT updated here."
     deps:
       - src/models/run_register_candidate.py
@@ -115,7 +115,7 @@ stages:
 
   # ── M11 run_drift ──────────────────────────────────────────────────────────
   run_drift:
-    cmd: .venv/bin/python -m src.monitoring.run_drift --no-html
+    cmd: python -m src.monitoring.run_drift --no-html
     desc: >
       Generate reference and production windows, run predictions via champion
       models, compute feature/prediction/confidence drift. Saves

@@ -22,7 +22,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 _ROOT = Path(__file__).resolve().parent.parent
-_PYTHON = str(_ROOT / ".venv" / "bin" / "python")
+_PYTHON = sys.executable
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -676,15 +676,16 @@ class TestMakefile:
         # The clean target should not remove raw data
         assert "data/raw" not in content.split("clean-generated")[1].split(".PHONY")[0]
 
-    def test_uses_venv_python(self):
-        """Makefile should use .venv/bin/python, not system python."""
+    def test_python_is_configurable(self):
+        """Makefile should allow callers to select an available interpreter."""
         content = self._content()
-        assert ".venv/bin/python" in content
+        assert "PYTHON ?= python" in content
+        assert "PYTHON := .venv/bin/python" not in content
 
-    def test_uses_venv_pip(self):
-        """Makefile should use python -m pip, not the stale pip shebang."""
+    def test_pip_uses_selected_python(self):
+        """Makefile should install through the configured interpreter."""
         content = self._content()
-        assert "-m pip" in content
+        assert "PIP    := $(PYTHON) -m pip" in content
 
     def test_help_runs(self):
         result = _run(["make", "help"])

@@ -233,7 +233,7 @@ def _test_count() -> int | None:
     try:
         result = subprocess.run(
             [
-                str(_ROOT / ".venv" / "bin" / "python"),
+                sys.executable,
                 "-m",
                 "pytest",
                 "tests/",
@@ -290,10 +290,7 @@ def collect() -> dict:
         },
         "environment": {
             "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            "dvc_version": _tool_version(
-                [str(_ROOT / ".venv" / "bin" / "python"), "-m", "dvc", "version"]
-            )
-            or "unknown",
+            "dvc_version": _tool_version([sys.executable, "-m", "dvc", "version"]) or "unknown",
             "docker_version": _tool_version(["docker", "--version"]) or "not available",
             "compose_version": _tool_version(["docker", "compose", "version"]) or "not available",
         },

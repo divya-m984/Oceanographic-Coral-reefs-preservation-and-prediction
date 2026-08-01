@@ -33,7 +33,7 @@ import urllib.request
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
-_PYTHON = str(_ROOT / ".venv" / "bin" / "python")
+_PYTHON = sys.executable
 
 # ── Service configuration ──────────────────────────────────────────────────────
 SERVICES = {

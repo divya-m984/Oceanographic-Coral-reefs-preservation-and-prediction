@@ -359,7 +359,7 @@ def check_dvc(report: PreflightReport) -> None:
 
     try:
         result = subprocess.run(
-            [str(_ROOT / ".venv" / "bin" / "python"), "-m", "dvc", "dag", "--md"],
+            [sys.executable, "-m", "dvc", "dag", "--md"],
             capture_output=True,
             text=True,
             timeout=30,
