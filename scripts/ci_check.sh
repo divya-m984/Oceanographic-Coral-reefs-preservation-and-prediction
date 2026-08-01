@@ -13,8 +13,7 @@
 #
 # Requirements
 # ------------
-#   - Project virtual environment activated, OR run with:
-#       .venv/bin/python  (the scripts call python directly)
+#   - Project dependencies available to ``python``, or set PYTHON explicitly.
 #   - All dependencies from requirements.txt installed.
 #
 # Safety
@@ -28,8 +27,8 @@
 
 set -euo pipefail
 
-PYTHON="${PYTHON:-.venv/bin/python}"
-RUFF="${RUFF:-.venv/bin/ruff}"
+PYTHON="${PYTHON:-python}"
+RUFF="${RUFF:-ruff}"
 
 # Use a throwaway MLflow DB so the test suite never touches artifacts/mlruns.db.
 export MLFLOW_TRACKING_URI="sqlite:///ci_check_mlruns.db"

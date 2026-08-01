@@ -380,7 +380,7 @@ New test file: `tests/test_dvc_pipeline.py` (26 tests):
 - `artifacts/mlruns.db` is excluded from DVC outputs. The MLflow database is mutable and would invalidate the pipeline on every run if tracked.
 - `data/processed/` is tracked as a whole directory by the preprocess stage.
 - Champion promotion is NOT part of the pipeline. `run_register_candidate.py` hard-codes `promote=False`.
-- Stage commands use `.venv/bin/python` (relative path from project root) to ensure the correct interpreter is used without requiring venv activation.
+- Stage commands use PATH-resolved `python`; activating a virtual environment or otherwise selecting the interpreter remains the caller's responsibility.
 
 ---
 

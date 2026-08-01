@@ -1,7 +1,7 @@
 schema: '2.0'
 stages:
   generate:
-    cmd: .venv/bin/python -m src.data.generate_data
+    cmd: python -m src.data.generate_data
     deps:
     - path: src/config.py
       hash: md5
@@ -27,7 +27,7 @@ stages:
       md5: be0baa5c1d40ac25de25ff7235467911
       size: 2471475
   validate:
-    cmd: .venv/bin/python -m src.data.validate
+    cmd: python -m src.data.validate
     deps:
     - path: data/raw/observations.csv
       hash: md5
@@ -47,8 +47,7 @@ stages:
       md5: be0baa5c1d40ac25de25ff7235467911
       size: 2471475
   preprocess:
-    cmd: .venv/bin/python -m src.data.preprocess --input 
-      data/raw/observations_validated.csv
+    cmd: python -m src.data.preprocess --input data/raw/observations_validated.csv
     deps:
     - path: data/raw/observations_validated.csv
       hash: md5
@@ -110,7 +109,7 @@ stages:
       size: 6372537
       nfiles: 11
   train:
-    cmd: .venv/bin/python -m src.models.train --task all
+    cmd: python -m src.models.train --task all
     deps:
     - path: data/processed/
       hash: md5
@@ -191,7 +190,7 @@ stages:
       md5: e4d0da6e3637c7a01bf4454a365378a9
       size: 8901
   evaluate:
-    cmd: .venv/bin/python -m src.models.run_evaluate
+    cmd: python -m src.models.run_evaluate
     deps:
     - path: models/evaluation_health.json
       hash: md5
@@ -215,7 +214,7 @@ stages:
       md5: e134483a7b0b32c7472122b81b603f76
       size: 447
   register_candidate:
-    cmd: .venv/bin/python -m src.models.run_register_candidate
+    cmd: python -m src.models.run_register_candidate
     deps:
     - path: models/best_model_health.joblib
       hash: md5
@@ -255,7 +254,7 @@ stages:
       md5: 24d59c552b5f34dd37098e9793e63d3a
       size: 485
   run_drift:
-    cmd: .venv/bin/python -m src.monitoring.run_drift --no-html
+    cmd: python -m src.monitoring.run_drift --no-html
     deps:
     - path: data/processed/preprocessor_health.joblib
       hash: md5

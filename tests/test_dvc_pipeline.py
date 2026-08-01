@@ -396,14 +396,13 @@ class TestDvcYaml:
         assert any("observations.csv" in d for d in deps_flat)
 
     def test_no_absolute_paths_in_cmds(self) -> None:
-        """All stage commands must not contain hardcoded absolute user paths."""
+        """Stage commands must use a portable PATH-resolved interpreter."""
         for name, stage in self.dvc["stages"].items():
             cmd = stage.get("cmd", "")
-            # Allow relative venv path (.venv/bin/python) but not /home/... paths
-            assert "/home/" not in cmd, f"Stage '{name}' cmd contains hardcoded home path"
-            assert cmd.count("/") == 0 or cmd.startswith(".venv/"), (
-                f"Stage '{name}' cmd uses unexpected absolute path: {cmd!r}"
+            assert cmd.startswith("python -m "), (
+                f"Stage '{name}' cmd must use PATH-resolved python: {cmd!r}"
             )
+            assert ".venv/bin/python" not in cmd
 
 
 # ---------------------------------------------------------------------------

@@ -10,9 +10,8 @@
 #
 # Long-running targets are marked with [SLOW] in their help text.
 
-PYTHON := .venv/bin/python
-PIP    := .venv/bin/python -m pip
-VENV   := .venv
+PYTHON ?= python
+PIP    := $(PYTHON) -m pip
 
 .DEFAULT_GOAL := help
 
@@ -22,7 +21,7 @@ help:
 	@echo "Oceanographic MLOps — available targets"
 	@echo ""
 	@echo "  Setup"
-	@echo "    install          Install all dependencies into .venv"
+	@echo "    install          Install all dependencies into the selected Python environment"
 	@echo ""
 	@echo "  Quality"
 	@echo "    lint             Run ruff check on src/, tests/, scripts/"
@@ -65,11 +64,10 @@ help:
 # ── Setup ──────────────────────────────────────────────────────────────────────
 .PHONY: install
 install:
-	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements.txt
 	$(PIP) install -e .
-	@echo "Installation complete. Activate with: source .venv/bin/activate"
+	@echo "Installation complete for: $(PYTHON)"
 
 # ── Quality ────────────────────────────────────────────────────────────────────
 .PHONY: lint
