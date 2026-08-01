@@ -21,8 +21,32 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 _ROOT = Path(__file__).resolve().parent.parent
 _PYTHON = sys.executable
+_DATASET_PATH = _ROOT / "data" / "raw" / "observations.csv"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _ensure_demo_dataset():
+    """Provide the deterministic DVC-managed dataset in clean checkouts."""
+    dataset_existed = _DATASET_PATH.exists()
+    if not dataset_existed:
+        subprocess.run(
+            [_PYTHON, "-m", "src.data.generate_data"],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=str(_ROOT),
+            timeout=30,
+        )
+
+    yield
+
+    if not dataset_existed:
+        _DATASET_PATH.unlink(missing_ok=True)
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -508,6 +532,23 @@ class TestEvidenceManifest:
             open(_ROOT / "data" / "raw" / "observations.csv", "rb").read()
         ).hexdigest()[:8]
         assert prefix == actual, f"Manifest prefix {prefix!r} != actual {actual!r}"
+
+    def test_cli_handles_unavailable_dataset_metadata(self, tmp_path, monkeypatch, capsys):
+        import scripts.collect_evidence as ce
+
+        manifest = {
+            "project_title": ce.PROJECT_TITLE,
+            "git": {"commit": "unknown"},
+            "dataset": {"rows": None, "columns": None, "sha256_prefix": None},
+            "tests": {"verified_count": None},
+        }
+        output = tmp_path / "manifest.json"
+        monkeypatch.setattr(ce, "collect", lambda: manifest)
+        monkeypatch.setattr(sys, "argv", ["collect_evidence.py", "--output", str(output)])
+
+        assert ce.main() == 0
+        assert "Dataset rows:  unavailable" in capsys.readouterr().out
+        assert json.loads(output.read_text())["dataset"]["rows"] is None
 
     def test_manifest_has_canonical_db_checksum(self, tmp_path):
         manifest = self._generate_manifest(tmp_path)

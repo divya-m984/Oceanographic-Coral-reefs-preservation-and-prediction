@@ -345,7 +345,9 @@ def main() -> int:
     print(f"Manifest written to {args.output}")
     print(f"  Project title: {manifest['project_title'][:60]}...")
     print(f"  Git commit:    {manifest['git']['commit'][:12]}")
-    print(f"  Dataset rows:  {manifest['dataset']['rows']:,}")
+    dataset_rows = manifest["dataset"]["rows"]
+    dataset_rows_display = f"{dataset_rows:,}" if dataset_rows is not None else "unavailable"
+    print(f"  Dataset rows:  {dataset_rows_display}")
     print(f"  Tests:         {manifest['tests']['verified_count']}")
     return 0
 
