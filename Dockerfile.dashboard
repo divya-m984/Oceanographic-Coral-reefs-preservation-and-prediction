@@ -19,8 +19,10 @@ WORKDIR /build
 
 # Dependency notes:
 #   - The dashboard does not import evidently; page 8 reads reports/drift_summary.json.
-#   - Removing evidently avoids its plotly<6 constraint, allowing plotly>=6.0 which
-#     the Reef Map page requires (px.scatter_map, introduced in plotly 6).
+#     Dropping it keeps the image smaller; the plotly pin is unchanged either way.
+#   - plotly stays on the requirements.txt range (>=5.24,<6).  px.scatter_map, used
+#     by the Reef Map page, was introduced in plotly 5.24.0 — not plotly 6 — so the
+#     evidently-compatible 5.x range fully supports this dashboard.
 COPY requirements.txt .
 RUN pip install --upgrade pip \
     && grep -v "^evidently" requirements.txt > /tmp/reqs_dash.txt \

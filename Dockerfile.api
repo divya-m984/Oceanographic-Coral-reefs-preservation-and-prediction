@@ -33,14 +33,11 @@ WORKDIR /build
 # Dependency notes:
 #   - mlflow 3.14 metadata declares pandas<3, but works fine with pandas 2.x
 #     (packages are functionally compatible despite conservative metadata).
-#   - evidently 0.7 metadata declares plotly<6.  The API/drift container does
-#     not use plotly directly, so we pin plotly>=5.10 here to satisfy evidently.
-#     The dashboard image keeps plotly>=6.0 (it does not need evidently).
+#   - evidently 0.7 metadata declares plotly<6.  requirements.txt already carries
+#     the compatible range (plotly>=5.24,<6), so no override is needed here.
 COPY requirements.txt .
 RUN pip install --upgrade pip \
-    && grep -v "^plotly" requirements.txt > /tmp/reqs_api.txt \
-    && echo "plotly>=5.10,<6" >> /tmp/reqs_api.txt \
-    && pip install -r /tmp/reqs_api.txt
+    && pip install -r requirements.txt
 
 
 # ---------------------------------------------------------------------------

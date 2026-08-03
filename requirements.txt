@@ -28,7 +28,10 @@ httpx>=0.27          # FastAPI test client dependency
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
 streamlit>=1.40
-plotly>=5.10,<6
+# plotly<6 is required by evidently 0.7 (declares plotly>=5.10,<6).
+# The >=5.24 floor is required by us: px.scatter_map (Reef Map page) was
+# introduced in plotly 5.24.0 — 5.10-5.23 do not have it.
+plotly>=5.24,<6
 folium>=0.19
 streamlit-folium>=0.22
 
@@ -36,7 +39,7 @@ streamlit-folium>=0.22
 mlflow>=3.0
 dvc>=3.50
 pandera>=0.20
-evidently>=0.7
+evidently>=0.7,<0.8   # 0.7 Report/Snapshot API; see src/monitoring/drift.py
 
 # ── Configuration / utilities ─────────────────────────────────────────────────
 pyyaml>=6.0
