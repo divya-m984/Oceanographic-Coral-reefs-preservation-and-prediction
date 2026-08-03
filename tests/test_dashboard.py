@@ -932,12 +932,14 @@ class TestAppSmoke:
             at.run()
             assert len(at.exception) == 0
 
-    def test_drift_page_shows_instructions_when_no_summary(self):
+    def test_drift_page_shows_instructions_when_no_summary(self, isolated_reports_dir):
         """Page 8 shows instructions when drift_summary.json is absent."""
         from src.dashboard.api_client import APIError
 
-        # drift_summary.json has not been generated yet in this project —
-        # the page should render the instructions panel without crashing.
+        # isolated_reports_dir points the page at an EMPTY temporary reports
+        # directory, so the "summary missing" branch is genuinely exercised
+        # without deleting the real reports/drift_summary.json.
+        assert not (isolated_reports_dir / "drift_summary.json").exists()
         page_path = "src/dashboard/pages/8_Drift_Monitoring.py"
         with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
             MockClient.return_value.health.side_effect = APIError("offline")
@@ -945,7 +947,7 @@ class TestAppSmoke:
             at.run()
             assert len(at.exception) == 0
 
-    def test_drift_page_renders_with_summary(self):
+    def test_drift_page_renders_with_summary(self, isolated_reports_dir):
         """Page 8 renders full drift results when drift_summary.json exists."""
         from src.dashboard.api_client import APIError
 
@@ -1018,15 +1020,15 @@ class TestAppSmoke:
             "recommendation": "RETRAIN RECOMMENDED: Significant feature drift detected.",
             "synthetic_data_disclaimer": "Synthetic data only.",
         }
-        summary_path = _PROJECT_ROOT / "reports" / "drift_summary.json"
-        # Write temporarily; clean up after test
+        # Write the fixture summary inside the isolated temporary reports
+        # directory.  The real reports/drift_summary.json is never written to
+        # and never deleted; pytest removes tmp_path automatically.
+        summary_path = isolated_reports_dir / "drift_summary.json"
         summary_path.write_text(json.dumps(drift_summary))
-        try:
-            page_path = "src/dashboard/pages/8_Drift_Monitoring.py"
-            with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
-                MockClient.return_value.health.side_effect = APIError("offline")
-                at = self._get_at(page_path)
-                at.run()
-                assert len(at.exception) == 0
-        finally:
-            summary_path.unlink(missing_ok=True)
+
+        page_path = "src/dashboard/pages/8_Drift_Monitoring.py"
+        with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
+            MockClient.return_value.health.side_effect = APIError("offline")
+            at = self._get_at(page_path)
+            at.run()
+            assert len(at.exception) == 0

@@ -23,13 +23,13 @@ because the window is intentionally UNLABELED.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from src.config import get_config
 from src.dashboard.components import (
     CORAL,
     DARK_BLUE,
@@ -42,8 +42,12 @@ from src.dashboard.components import (
 set_page("Drift Monitoring")
 render_sidebar(show_region_filter=False)
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
-_SUMMARY_PATH = _PROJECT_ROOT / "reports" / "drift_summary.json"
+# Resolve report locations through the shared Config singleton (the same
+# convention used by src/monitoring/run_drift.py) rather than re-deriving them
+# from __file__.  This keeps a single source of truth for reports_dir and lets
+# tests point the page at an isolated directory instead of the real reports/.
+_REPORTS_DIR = get_config().paths.reports_dir
+_SUMMARY_PATH = get_config().drift_summary_path
 
 # ---------------------------------------------------------------------------
 # Header
@@ -347,8 +351,8 @@ st.caption(
     "Open these files in a browser for detailed per-feature visualisations."
 )
 
-report_health = _PROJECT_ROOT / "reports" / "drift_report_health.html"
-report_restoration = _PROJECT_ROOT / "reports" / "drift_report_restoration.html"
+report_health = _REPORTS_DIR / "drift_report_health.html"
+report_restoration = _REPORTS_DIR / "drift_report_restoration.html"
 
 if report_health.exists():
     st.success("Reef Health report: `reports/drift_report_health.html`")

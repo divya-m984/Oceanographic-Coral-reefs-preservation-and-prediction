@@ -907,34 +907,38 @@ class TestRegistryInvariants:
         after = self._db_checksum()
         assert before == after, "scripts/demo.py status mutated artifacts/mlruns.db"
 
-    def test_champion_remains_v1_health(self):
+    # The four tests below assert the *logical* contents of the canonical
+    # registry.  They run against a private byte-copy supplied by the
+    # ``canonical_registry_uri`` fixture (see tests/conftest.py) because
+    # opening the real file through MLflow can rewrite SQLite pages and change
+    # its checksum.  The client is constructed with an explicit tracking_uri
+    # rather than mlflow.set_tracking_uri() so no global MLflow state leaks
+    # into later tests in the same session.
+
+    def test_champion_remains_v1_health(self, canonical_registry_uri):
         import mlflow
 
-        mlflow.set_tracking_uri(f"sqlite:///{_ROOT / 'artifacts' / 'mlruns.db'}")
-        client = mlflow.tracking.MlflowClient()
+        client = mlflow.tracking.MlflowClient(tracking_uri=canonical_registry_uri)
         rm = client.get_registered_model("coralsense_reef_health")
         assert str(rm.aliases.get("champion")) == "1"
 
-    def test_champion_remains_v1_restoration(self):
+    def test_champion_remains_v1_restoration(self, canonical_registry_uri):
         import mlflow
 
-        mlflow.set_tracking_uri(f"sqlite:///{_ROOT / 'artifacts' / 'mlruns.db'}")
-        client = mlflow.tracking.MlflowClient()
+        client = mlflow.tracking.MlflowClient(tracking_uri=canonical_registry_uri)
         rm = client.get_registered_model("coralsense_restoration_suitability")
         assert str(rm.aliases.get("champion")) == "1"
 
-    def test_health_has_4_versions(self):
+    def test_health_has_4_versions(self, canonical_registry_uri):
         import mlflow
 
-        mlflow.set_tracking_uri(f"sqlite:///{_ROOT / 'artifacts' / 'mlruns.db'}")
-        client = mlflow.tracking.MlflowClient()
+        client = mlflow.tracking.MlflowClient(tracking_uri=canonical_registry_uri)
         versions = client.search_model_versions("name='coralsense_reef_health'")
         assert len(versions) == 4
 
-    def test_restoration_has_4_versions(self):
+    def test_restoration_has_4_versions(self, canonical_registry_uri):
         import mlflow
 
-        mlflow.set_tracking_uri(f"sqlite:///{_ROOT / 'artifacts' / 'mlruns.db'}")
-        client = mlflow.tracking.MlflowClient()
+        client = mlflow.tracking.MlflowClient(tracking_uri=canonical_registry_uri)
         versions = client.search_model_versions("name='coralsense_restoration_suitability'")
         assert len(versions) == 4
