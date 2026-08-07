@@ -14,7 +14,11 @@ Coverage
 - All five required jobs are present.
 - All jobs have a timeout.
 - Timeouts are reasonable (≤ 60 minutes each).
-- Official pinned actions are used (checkout@v4, setup-python@v5, upload-artifact@v4).
+- Official pinned actions are used at or above their minimum supported major
+  (checkout@v7, setup-python@v7, upload-artifact@v7 — older majors target the
+  deprecated Node.js 20 runtime).
+- The Node.js 20 deprecation escape hatch is not enabled.
+- No pull_request_target trigger and no allow-unsafe-pr-checkout override.
 - No hardcoded absolute local paths (/home/, /Users/, /root/).
 - The --promote flag does not appear anywhere.
 - The canonical MLflow database path (artifacts/mlruns.db) is not referenced
@@ -25,6 +29,7 @@ Coverage
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -51,11 +56,22 @@ _REQUIRED_TRIGGERS = {"push", "pull_request", "workflow_dispatch"}
 # We must look it up as True in the parsed dict.
 _ON_KEY = True
 
-_OFFICIAL_ACTIONS = {
-    "actions/checkout@v4",
-    "actions/setup-python@v5",
-    "actions/upload-artifact@v4",
+# Minimum acceptable major version for each first-party action.
+#
+# GitHub deprecated the Node.js 20 runtime (2025-09-19 changelog). checkout@v4,
+# setup-python@v5 and upload-artifact@v4 all target Node 20 and emit a
+# deprecation warning on every job. The v7 majors ship the modern runtime.
+# A *minimum* is asserted rather than an exact pin so that future security
+# bumps do not fail the suite, while downgrades still do.
+_MIN_ACTION_MAJORS = {
+    "actions/checkout": 7,
+    "actions/setup-python": 7,
+    "actions/upload-artifact": 7,
 }
+
+# Escape hatch that silences the Node 20 deprecation instead of fixing it.
+# Setting it is forbidden; it pins CI to a runtime GitHub is removing.
+_FORBIDDEN_ENV_KEYS = {"ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION"}
 
 
 @pytest.fixture(scope="module")
@@ -96,6 +112,43 @@ def _all_env_values(workflow: dict) -> list[str]:
             for v in step.get("env", {}).values():
                 values.append(str(v))
     return values
+
+
+def _all_env_blocks(workflow: dict) -> list[tuple[str, dict]]:
+    """Collect every ``env:`` mapping — workflow-level, job-level and step-level.
+
+    Returned as ``(location, mapping)`` pairs so failures name the offender.
+    """
+    blocks: list[tuple[str, dict]] = []
+    if isinstance(workflow.get("env"), dict):
+        blocks.append(("workflow", workflow["env"]))
+    for name, job in workflow.get("jobs", {}).items():
+        if isinstance(job.get("env"), dict):
+            blocks.append((f"job {name!r}", job["env"]))
+        for i, step in enumerate(job.get("steps", [])):
+            if isinstance(step.get("env"), dict):
+                blocks.append((f"job {name!r} step {i}", step["env"]))
+    return blocks
+
+
+def _all_steps(workflow: dict) -> list[tuple[str, dict]]:
+    """Collect every step as a ``(job_name, step)`` pair."""
+    return [
+        (name, step)
+        for name, job in workflow.get("jobs", {}).items()
+        for step in job.get("steps", [])
+    ]
+
+
+def _action_major(uses: str) -> int | None:
+    """Return the major version of a ``owner/repo@vN`` reference, else ``None``.
+
+    ``None`` means the reference is not a plain ``@vN`` / ``@vN.M.P`` tag — e.g.
+    a commit SHA, a branch, or a local ``./path`` action.
+    """
+    _, _, ref = uses.partition("@")
+    match = re.fullmatch(r"v(\d+)(?:\.\d+)*", ref)
+    return int(match.group(1)) if match else None
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +278,37 @@ class TestSecurity:
                 f"dvc repro found in CI command (forbidden — triggers register_candidate): {cmd!r}"
             )
 
+    def test_node_20_escape_hatch_not_enabled(self, workflow: dict) -> None:
+        """
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION silences the Node 20 deprecation
+        by forcing a runtime GitHub is removing. Upgrade the action major instead.
+        """
+        for location, env in _all_env_blocks(workflow):
+            offenders = _FORBIDDEN_ENV_KEYS & set(env)
+            assert not offenders, f"forbidden env {sorted(offenders)} set at {location}"
+
+    def test_no_pull_request_target_trigger(self, workflow: dict) -> None:
+        """
+        pull_request_target runs with the base repository's token and secrets
+        against fork-supplied code. This project only needs push/pull_request.
+        """
+        on = workflow.get(_ON_KEY, {})
+        triggers = set(on) if isinstance(on, dict) else {on} if isinstance(on, str) else set(on)
+        assert "pull_request_target" not in triggers, (
+            "pull_request_target must not be used; it exposes secrets to fork code"
+        )
+
+    def test_checkout_does_not_allow_unsafe_pr_checkout(self, workflow: dict) -> None:
+        """checkout@v7's fork-safety guard must not be disabled."""
+        for job_name, step in _all_steps(workflow):
+            if not step.get("uses", "").startswith("actions/checkout@"):
+                continue
+            value = step.get("with", {}).get("allow-unsafe-pr-checkout")
+            assert value in (None, False, "false"), (
+                f"job {job_name!r} sets allow-unsafe-pr-checkout={value!r}; "
+                "the checkout fork-safety guard must stay enabled"
+            )
+
     def test_mlflow_tracking_uri_not_pointing_to_canonical_db(self, workflow: dict) -> None:
         """
         If MLFLOW_TRACKING_URI is set in any step env, it must NOT point at the
@@ -239,31 +323,35 @@ class TestSecurity:
 
 
 class TestActions:
-    def test_checkout_action_is_pinned_to_v4(self, workflow: dict) -> None:
-        uses_values = _all_uses_values(workflow)
-        checkout_entries = [u for u in uses_values if u.startswith("actions/checkout")]
-        assert checkout_entries, "actions/checkout must be used"
-        for entry in checkout_entries:
-            assert entry == "actions/checkout@v4", (
-                f"checkout action must be pinned to @v4, got {entry!r}"
+    @pytest.mark.parametrize("action", sorted(_MIN_ACTION_MAJORS))
+    def test_action_is_used(self, workflow: dict, action: str) -> None:
+        entries = [u for u in _all_uses_values(workflow) if u.startswith(f"{action}@")]
+        assert entries, f"{action} must be used"
+
+    @pytest.mark.parametrize("action", sorted(_MIN_ACTION_MAJORS))
+    def test_action_meets_minimum_major(self, workflow: dict, action: str) -> None:
+        """Reject majors older than the Node 24 baseline (checkout/setup-python/upload v7)."""
+        minimum = _MIN_ACTION_MAJORS[action]
+        for entry in _all_uses_values(workflow):
+            if not entry.startswith(f"{action}@"):
+                continue
+            major = _action_major(entry)
+            assert major is not None, (
+                f"{entry!r} must be pinned to a @vN tag so its major can be checked"
+            )
+            assert major >= minimum, (
+                f"{action} must be at least @v{minimum} "
+                f"(older majors target the deprecated Node.js 20 runtime), got {entry!r}"
             )
 
-    def test_setup_python_action_is_pinned_to_v5(self, workflow: dict) -> None:
-        uses_values = _all_uses_values(workflow)
-        setup_python_entries = [u for u in uses_values if u.startswith("actions/setup-python")]
-        assert setup_python_entries, "actions/setup-python must be used"
-        for entry in setup_python_entries:
-            assert entry == "actions/setup-python@v5", (
-                f"setup-python action must be pinned to @v5, got {entry!r}"
-            )
-
-    def test_upload_artifact_action_is_pinned_to_v4(self, workflow: dict) -> None:
-        uses_values = _all_uses_values(workflow)
-        upload_entries = [u for u in uses_values if u.startswith("actions/upload-artifact")]
-        assert upload_entries, "actions/upload-artifact must be used"
-        for entry in upload_entries:
-            assert entry == "actions/upload-artifact@v4", (
-                f"upload-artifact action must be pinned to @v4, got {entry!r}"
+    def test_all_first_party_actions_are_version_pinned(self, workflow: dict) -> None:
+        """Every actions/* reference must carry an explicit @vN tag, never a branch."""
+        for entry in _all_uses_values(workflow):
+            if not entry.startswith("actions/"):
+                continue
+            assert "@" in entry, f"{entry!r} must be pinned to a version"
+            assert _action_major(entry) is not None, (
+                f"{entry!r} must be pinned to a @vN tag, not a branch or floating ref"
             )
 
     def test_pip_caching_enabled_in_at_least_one_job(self, workflow: dict) -> None:
