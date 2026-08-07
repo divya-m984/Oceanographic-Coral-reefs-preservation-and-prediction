@@ -431,7 +431,7 @@ Python **3.12** in CI. Project requires `>=3.11`; tested locally on 3.14.6.
 
 #### Caching strategy
 
-`actions/setup-python@v5` with `cache: pip` and `cache-dependency-path: requirements.txt`.
+`actions/setup-python@v7` with `cache: pip` and `cache-dependency-path: requirements.txt`.
 Subsequent runs on unchanged dependencies skip re-downloading (~3 GB of packages).
 
 #### CI-safe MLflow strategy
@@ -480,8 +480,17 @@ New test file: `tests/test_ci_workflow.py` (26 tests):
 - `TestPermissions` — 3 tests: permissions block, contents:read, no write
 - `TestConcurrency` — 3 tests: cancel-in-progress, group includes workflow+ref
 - `TestJobs` — 5 tests: required jobs, timeouts, build dependencies
-- `TestSecurity` — 4 tests: no /home/ paths, no --promote, no dvc repro, no canonical DB
-- `TestActions` — 4 tests: pinned checkout@v4, setup-python@v5, upload-artifact@v4, pip cache
+- `TestSecurity` — 7 tests: no /home/ paths, no --promote, no dvc repro, no canonical DB,
+  no Node 20 escape hatch, no `pull_request_target`, no `allow-unsafe-pr-checkout`
+- `TestActions` — 8 tests: checkout/setup-python/upload-artifact each used and at
+  `@v7` or newer, all `actions/*` refs version-pinned, pip cache enabled
+
+> Updated after M14: the first-party actions were moved to `@v7`. The previous
+> `checkout@v4` / `setup-python@v5` / `upload-artifact@v4` majors target the
+> deprecated Node.js 20 runtime and emitted one deprecation warning per job
+> (five per run). `TestActions` now asserts a *minimum* major rather than an
+> exact pin, so future security bumps do not fail the suite while downgrades
+> still do. The file grew from 26 to 33 tests.
 
 #### Dataset integrity
 
