@@ -38,6 +38,36 @@ import requests
 # ---------------------------------------------------------------------------
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_DASHBOARD_DIR = _PROJECT_ROOT / "src" / "dashboard"
+_PAGES_DIR = _DASHBOARD_DIR / "pages"
+
+
+def resolve_app_path(script_path: str | Path) -> Path:
+    """
+    Return an absolute, existing path to a dashboard script.
+
+    ``AppTest.from_file`` documents its ``script_path`` as "absolute or
+    relative to the file calling ``.from_file``".  A relative path such as
+    ``"src/dashboard/app.py"`` is therefore resolved against ``tests/`` and
+    becomes ``tests/src/dashboard/app.py``.  Some Streamlit versions probe the
+    path against the current working directory first, which accidentally works
+    when pytest is launched from the repository root — but that is not a
+    guarantee, and it breaks in CI.
+
+    Every path handed to ``AppTest`` is made absolute here, resolved against
+    the repository root (derived from this file) and never against the cwd.
+    """
+    path = Path(script_path)
+    if not path.is_absolute():
+        path = _PROJECT_ROOT / path
+    path = path.resolve()
+    if not path.is_file():
+        raise AssertionError(
+            f"dashboard script not found: {path} (requested {script_path!r}, "
+            f"project root {_PROJECT_ROOT})"
+        )
+    return path
+
 
 HEALTH_CLASSES = ("healthy", "stressed", "bleached", "severely_degraded")
 RESTORATION_CLASSES = ("suitable", "moderately_suitable", "unsuitable")
@@ -859,10 +889,11 @@ class TestModuleImportability:
 class TestAppSmoke:
     """Smoke tests using Streamlit's AppTest.from_file()."""
 
-    def _get_at(self, page_path: str):
+    def _get_at(self, page_path: str | Path):
         from streamlit.testing.v1 import AppTest
 
-        return AppTest.from_file(page_path, default_timeout=30)
+        # Always absolute: a relative path would be resolved against tests/.
+        return AppTest.from_file(str(resolve_app_path(page_path)), default_timeout=30)
 
     def test_main_app_runs_without_exception(self, tmp_path, monkeypatch):
         from src.dashboard import data_loader
@@ -1030,5 +1061,106 @@ class TestAppSmoke:
         with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
             MockClient.return_value.health.side_effect = APIError("offline")
             at = self._get_at(page_path)
+            at.run()
+            assert len(at.exception) == 0
+
+
+# ---------------------------------------------------------------------------
+# Regression: AppTest script paths must be absolute and repo-root relative
+# ---------------------------------------------------------------------------
+
+
+class TestAppTestPathResolution:
+    """
+    Guards against the CI failure where ``AppTest.from_file("src/dashboard/…")``
+    was resolved against ``tests/`` and looked for ``tests/src/dashboard/app.py``.
+    """
+
+    _SMOKE_SCRIPTS = (
+        "src/dashboard/app.py",
+        "src/dashboard/pages/1_Overview.py",
+        "src/dashboard/pages/5_Predict.py",
+        "src/dashboard/pages/6_Model_Performance.py",
+        "src/dashboard/pages/7_MLOps_Status.py",
+        "src/dashboard/pages/8_Drift_Monitoring.py",
+    )
+
+    def test_main_app_path_is_absolute(self):
+        resolved = resolve_app_path("src/dashboard/app.py")
+        assert resolved.is_absolute()
+        assert resolved == _DASHBOARD_DIR / "app.py"
+
+    @pytest.mark.parametrize("script", _SMOKE_SCRIPTS)
+    def test_every_smoke_script_resolves_absolutely(self, script):
+        resolved = resolve_app_path(script)
+        assert resolved.is_absolute()
+        assert resolved.is_file()
+        assert resolved.is_relative_to(_DASHBOARD_DIR)
+
+    @pytest.mark.parametrize("script", _SMOKE_SCRIPTS)
+    def test_resolution_never_lands_under_tests_dir(self, script):
+        """``tests/src/dashboard/...`` was the exact CI failure path."""
+        resolved = resolve_app_path(script)
+        assert not resolved.is_relative_to(_PROJECT_ROOT / "tests")
+
+    def test_every_dashboard_page_resolves(self):
+        pages = sorted(p.name for p in _PAGES_DIR.glob("*.py"))
+        assert pages, "no dashboard pages found"
+        for name in pages:
+            assert resolve_app_path(f"src/dashboard/pages/{name}").is_file()
+
+    def test_resolution_is_independent_of_cwd(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert resolve_app_path("src/dashboard/app.py") == _DASHBOARD_DIR / "app.py"
+        assert resolve_app_path("src/dashboard/pages/8_Drift_Monitoring.py").is_file()
+
+    def test_absolute_input_is_not_joined_twice(self):
+        absolute = _PAGES_DIR / "8_Drift_Monitoring.py"
+        assert resolve_app_path(absolute) == absolute
+        assert resolve_app_path(str(absolute)) == absolute
+
+    def test_path_and_str_inputs_agree(self):
+        assert resolve_app_path("src/dashboard/app.py") == resolve_app_path(
+            Path("src/dashboard/app.py")
+        )
+
+    def test_missing_script_raises_useful_error(self):
+        with pytest.raises(AssertionError, match="dashboard script not found"):
+            resolve_app_path("src/dashboard/pages/does_not_exist.py")
+
+    def test_smoke_helper_hands_apptest_an_absolute_path(self, tmp_path, monkeypatch):
+        """The helper used by every smoke test must never pass a relative path."""
+        from streamlit.testing.v1 import AppTest
+
+        monkeypatch.chdir(tmp_path)
+        captured: list[str] = []
+
+        def _fake_from_file(script_path, **kwargs):
+            captured.append(str(script_path))
+            return mock.MagicMock()
+
+        monkeypatch.setattr(AppTest, "from_file", _fake_from_file)
+        for script in self._SMOKE_SCRIPTS:
+            TestAppSmoke()._get_at(script)
+
+        assert len(captured) == len(self._SMOKE_SCRIPTS)
+        for path in captured:
+            assert Path(path).is_absolute()
+            assert Path(path).is_file()
+            assert not Path(path).is_relative_to(_PROJECT_ROOT / "tests")
+
+    def test_main_app_runs_from_a_foreign_cwd(self, tmp_path, monkeypatch):
+        """End-to-end proof: a real AppTest run does not depend on the cwd."""
+        from src.dashboard import data_loader
+
+        monkeypatch.setattr(data_loader, "_RAW_CSV", tmp_path / "none.csv")
+        data_loader.load_observations.clear()
+        foreign_cwd = tmp_path / "elsewhere"
+        foreign_cwd.mkdir()
+        monkeypatch.chdir(foreign_cwd)
+
+        with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
+            MockClient.return_value.health.return_value = {"status": "ok"}
+            at = TestAppSmoke()._get_at("src/dashboard/app.py")
             at.run()
             assert len(at.exception) == 0
