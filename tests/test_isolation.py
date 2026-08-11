@@ -190,3 +190,41 @@ class TestCanonicalArtifactsSurviveFocusedTests:
         for path, digest in before.items():
             assert path.is_file(), f"{path} was deleted by the focused tests"
             assert _sha256(path) == digest, f"{path} was modified by the focused tests"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Regression: the focused subprocess must not depend on the caller's cwd
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.slow
+class TestFocusedSubprocessIsCwdIndependent:
+    """
+    ``AppTest.from_file`` resolves a relative script path against the calling
+    test file, so ``"src/dashboard/app.py"`` became ``tests/src/dashboard/app.py``
+    in CI.  The dashboard smoke tests now pass absolute, repository-root-derived
+    paths; this proves it by running one from a directory outside the repository.
+    """
+
+    _NODE = "tests/test_dashboard.py::TestAppSmoke::test_drift_page_renders_with_summary"
+
+    def test_dashboard_smoke_passes_from_a_foreign_cwd(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)  # the parent's cwd is outside the repository
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "-p",
+                "no:cacheprovider",
+                str(PROJECT_ROOT / self._NODE),  # absolute node id
+            ],
+            cwd=tmp_path,  # …and so is the child's
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, (
+            f"dashboard smoke test failed from cwd={tmp_path}:\n{proc.stdout}\n{proc.stderr}"
+        )
+        assert "tests/src/dashboard" not in proc.stdout
