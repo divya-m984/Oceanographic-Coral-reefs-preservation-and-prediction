@@ -753,7 +753,7 @@ Oceanographic-reef-mlops-proj/
 
 ## License
 
-The `pyproject.toml` declares an MIT license, but no `LICENSE` file currently exists in the repository root. The licensing terms should be confirmed by the repository owner before reuse.
+Released under the [MIT License](LICENSE), matching the `license = { text = "MIT" }` declaration in `pyproject.toml`.
 
 ---
 
