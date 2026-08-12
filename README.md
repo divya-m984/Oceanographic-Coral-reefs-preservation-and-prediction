@@ -3,7 +3,7 @@
 **End-to-end MLOps research prototype for coral reef health and restoration-suitability classification using synthetic sonar and environmental sensor data.**
 
 ![Python](https://img.shields.io/badge/Python-%E2%89%A5%203.11-blue?logo=python&logoColor=white)
-![CI](https://github.com/divya-m984/Oceanographic-reef-mlops-proj/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/divya-m984/Oceanographic-Coral-reefs-preservation-and-prediction/actions/workflows/ci.yml/badge.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.130+-009688?logo=fastapi&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.40+-FF4B4B?logo=streamlit&logoColor=white)
 ![MLflow](https://img.shields.io/badge/MLflow-3.0+-0194E2?logo=mlflow&logoColor=white)
@@ -441,8 +441,8 @@ The `CORALSENSE_API_URL` environment variable overrides the API base URL (defaul
 ### Installation
 
 ```bash
-git clone https://github.com/divya-m984/Oceanographic-reef-mlops-proj.git
-cd Oceanographic-reef-mlops-proj
+git clone https://github.com/divya-m984/Oceanographic-Coral-reefs-preservation-and-prediction.git
+cd Oceanographic-Coral-reefs-preservation-and-prediction
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -462,6 +462,40 @@ Optionally copy the environment template:
 
 ```bash
 cp .env.example .env
+```
+
+### DVC remote access
+
+Versioned pipeline artifacts are stored in the DagsHub-backed DVC remote named `dagshub`. The tracked `.dvc/config` contains only non-secret remote configuration; authentication credentials must remain local in `.dvc/config.local`, which is Git-ignored.
+
+The `dvc[s3]` dependency in `requirements.txt` provides the S3-compatible remote support required by DagsHub.
+
+Set `DAGSHUB_TOKEN` securely in your shell, then configure your credentials locally:
+
+```bash
+dvc remote modify --local dagshub access_key_id "$DAGSHUB_TOKEN"
+dvc remote modify --local dagshub secret_access_key "$DAGSHUB_TOKEN"
+unset DAGSHUB_TOKEN
+```
+
+Never commit or share `.dvc/config.local`, access tokens, or other credentials.
+
+Restore the DVC-managed datasets, preprocessors, models, and monitoring artifacts for the current Git revision:
+
+```bash
+dvc pull -r dagshub
+```
+
+Check synchronization without uploading:
+
+```bash
+dvc status --remote dagshub
+```
+
+When intentionally publishing newly versioned DVC objects:
+
+```bash
+dvc push -r dagshub
 ```
 
 ---
@@ -652,7 +686,7 @@ flowchart TB
 ## Project Structure
 
 ```
-Oceanographic-reef-mlops-proj/
+Oceanographic-Coral-reefs-preservation-and-prediction/
 ├── README.md
 ├── Makefile                     # Build, test, demo, and service targets
 ├── CHANGELOG.md                 # Milestone history
@@ -710,7 +744,7 @@ Oceanographic-reef-mlops-proj/
 - **Synthetic dataset** — All 15,000 observations are computer-generated. Feature distributions and label thresholds are approximations, not field-calibrated ecological models.
 - **No live sonar hardware integration** — The system does not connect to real sonar instruments, ROVs, AUVs, or buoy sensors.
 - **No marine-scientist field validation** — No predictions have been reviewed or validated by domain experts.
-- **No DVC remote configured** — Pipeline artifacts are stored locally only. CI uses isolated temporary data instead of `dvc pull`.
+- **Credentialed external DVC storage** — Pipeline artifacts are backed by the DagsHub DVC remote, but collaborators require their own DagsHub credentials. CI remains intentionally isolated and does not depend on external `dvc pull` access.
 - **Local prototype deployment** — Docker Compose runs on `localhost`; no cloud hosting, TLS, or authentication is configured.
 - **Predictions must not be used for real restoration decisions** — This is a research and educational prototype.
 - **Legacy identifiers** — MLflow registered model names and some internal paths use the `coralsense_` prefix from an earlier project phase. These are database-level identifiers that persist in `artifacts/mlruns.db` and `params.yaml`.
@@ -722,7 +756,7 @@ Oceanographic-reef-mlops-proj/
 - Real sonar and environmental sensor data ingestion (AUV/ROV or moored buoy telemetry)
 - Time-series and spatial modelling (seasonal cycles, reef transect gradients)
 - Field validation with expert-labelled datasets from marine biologists
-- Cloud object storage with DVC remote (S3, GCS, or Azure Blob)
+- Production-grade remote-storage hardening with retention policies, backups, lifecycle controls, and least-privilege access
 - Secure hosted deployment with TLS, authentication, and role-based access
 - Continuous data collection and automated drift monitoring triggers
 - Alerting on drift events and model degradation
@@ -759,4 +793,4 @@ Released under the [MIT License](LICENSE), matching the `license = { text = "MIT
 
 ## Attribution
 
-Repository: [divya-m984/Oceanographic-reef-mlops-proj](https://github.com/divya-m984/Oceanographic-reef-mlops-proj)
+Repository: [divya-m984/Oceanographic-Coral-reefs-preservation-and-prediction](https://github.com/divya-m984/Oceanographic-Coral-reefs-preservation-and-prediction)
