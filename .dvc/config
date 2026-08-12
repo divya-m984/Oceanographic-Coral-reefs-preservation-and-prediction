@@ -1,0 +1,3 @@
+['remote "dagshub"']
+    url = s3://dvc
+    endpointurl = https://dagshub.com/divya-m984/Oceanographic-Coral-reefs-preservation-and-prediction.s3

@@ -53,7 +53,7 @@ dashboard = [
 ]
 mlops = [
     "mlflow>=3.0",
-    "dvc>=3.50",
+    "dvc[s3]>=3.50",
     "pandera>=0.20",
     "evidently>=0.7,<0.8",
 ]
