@@ -84,12 +84,17 @@ services:
       # Bundle mode: load from deploy/bundles/ — no MLflow network call
       CORALSENSE_MODEL_MODE: bundle
       CORALSENSE_BUNDLE_PATH: /app/deploy/bundles
-      API_HOST: "0.0.0.0"
-      API_PORT: "8000"
+      # The image binds 0.0.0.0:${PORT:-8000}; the container port stays 8000
+      # here, so API_PORT below selects only the HOST port (as MLFLOW_PORT and
+      # DASHBOARD_PORT do).  The former API_HOST/API_PORT container env vars
+      # were never read by the entrypoint and have been removed.
     ports:
       - "${API_PORT:-8000}:8000"
     restart: unless-stopped
     healthcheck:
+      # Probes /ready, not /health: "healthy" must mean inference is actually
+      # available (both champion pipelines loaded from the verified bundle).
+      # /health stays available as the process-liveness endpoint.
       test:
         - "CMD"
         - "python"
@@ -97,7 +102,7 @@ services:
         - |
           import urllib.request, sys
           try:
-              r = urllib.request.urlopen('http://localhost:8000/health', timeout=8)
+              r = urllib.request.urlopen('http://localhost:8000/ready', timeout=8)
               sys.exit(0 if r.status == 200 else 1)
           except Exception:
               sys.exit(1)
@@ -113,17 +118,22 @@ services:
       dockerfile: Dockerfile.dashboard
     container_name: coralsense-dashboard
     environment:
+      # Full base URL of the API. Compose uses the service name; a cloud
+      # deployment sets a full HTTPS URL here with no code change.
       CORALSENSE_API_URL: "http://api:8000"
-      STREAMLIT_SERVER_PORT: "8501"
-      STREAMLIT_SERVER_ADDRESS: "0.0.0.0"
       STREAMLIT_SERVER_HEADLESS: "true"
       STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      # Server port/address come from the image CMD (${PORT:-8501} on 0.0.0.0),
+      # so STREAMLIT_SERVER_PORT/ADDRESS are not duplicated here.
     volumes:
+      # LOCAL DEVELOPMENT ONLY.  The image already bakes in the same read-only
+      # synthetic assets, so it runs standalone in the cloud without any mount;
+      # these bind mounts simply overlay the identical host copies and let a
+      # local `make drift` run appear in the dashboard without a rebuild.
+      #
       # Observation data for visualisation (read-only)
       - ./data/raw:/app/data/raw:ro
-      # Reference window (written by drift stage, read by dashboard)
-      - ./data/reference:/app/data/reference:ro
-      # Drift reports (written by drift container, read by page 8)
+      # Drift reports (written by the drift container, read by pages 8 and 9)
       - ./reports:/app/reports:ro
     ports:
       - "${DASHBOARD_PORT:-8501}:8501"

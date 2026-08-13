@@ -1,0 +1,64 @@
+# Dockerfile.dashboard.dockerignore — build context for the dashboard image.
+#
+# BuildKit uses this file INSTEAD OF the root .dockerignore when building with
+# `-f Dockerfile.dashboard` (it does not merge with it), so this file is
+# deliberately self-contained.
+#
+# Strategy: deny everything, then re-include only the dashboard source plus the
+# small set of read-only synthetic demonstration assets the image bakes in.
+#
+# Negation care: `**` excludes every path, so each required asset is re-included
+# by its EXACT path, and its parent directories are re-included too — Docker
+# will not descend into a directory that no rule re-includes.  Whole data or
+# model directories are never re-included, so models/*.joblib (3 MB),
+# data/processed/ (6 MB), mlruns/ (367 MB), and the MLflow database stay out.
+#
+# The dashboard holds NO model, NO MLflow database, and NO credential.  All
+# predictions go to the API over CORALSENSE_API_URL.
+
+# ── Deny everything ───────────────────────────────────────────────────────────
+**
+
+# ── Application source and configuration ─────────────────────────────────────
+!src/
+!params.yaml
+!pyproject.toml
+!requirements.txt
+!.streamlit/
+
+# ── Read-only synthetic demonstration assets (restored by `dvc pull` in CI) ──
+# Required: every visualisation page calls load_observations().
+!data/
+!data/raw/
+!data/raw/observations.csv
+# Required: Model Performance and Overview pages call load_evaluation().
+!models/
+!models/evaluation_health.json
+!models/evaluation_restoration.json
+# Optional: Drift Monitoring and Governance pages degrade gracefully without it.
+!reports/
+!reports/drift_summary.json
+
+# ── Re-exclude anything unwanted that the rules above would pull back in ─────
+# Trained artifacts must never reach the dashboard image
+models/*.joblib
+data/processed/
+data/reference/
+data/production/
+# Full Evidently HTML reports are large and only existence-checked by page 8
+reports/*.html
+# Caches and build residue
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/*.egg-info/
+# Secrets must never enter the context, under any circumstances
+.env
+**/.env
+.dvc/
+.dvc/config.local
+*.pem
+*.key
+# Editor and OS noise
+**/.DS_Store
+**/*.swp

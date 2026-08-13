@@ -32,18 +32,19 @@
 12. [Streamlit Dashboard](#streamlit-dashboard)
 13. [Local Setup](#local-setup)
 14. [Running the Complete Application](#running-the-complete-application)
-15. [Testing and Code Quality](#testing-and-code-quality)
-16. [CI/CD Architecture](#cicd-architecture)
-17. [Monitoring and Drift](#monitoring-and-drift)
-18. [Model Governance](#model-governance)
-19. [Project Structure](#project-structure)
-20. [Technology Stack](#technology-stack)
-21. [Limitations](#limitations)
-22. [Future Work](#future-work)
-23. [Responsible-Use Notice](#responsible-use-notice)
-24. [Documentation](#documentation)
-25. [License](#license)
-26. [Attribution](#attribution)
+15. [Deployment Architecture](#deployment-architecture)
+16. [Testing and Code Quality](#testing-and-code-quality)
+17. [CI/CD Architecture](#cicd-architecture)
+18. [Monitoring and Drift](#monitoring-and-drift)
+19. [Model Governance](#model-governance)
+20. [Project Structure](#project-structure)
+21. [Technology Stack](#technology-stack)
+22. [Limitations](#limitations)
+23. [Future Work](#future-work)
+24. [Responsible-Use Notice](#responsible-use-notice)
+25. [Documentation](#documentation)
+26. [License](#license)
+27. [Attribution](#attribution)
 
 ---
 
@@ -330,12 +331,31 @@ API documentation: http://127.0.0.1:8000/docs
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Project index and documentation links |
-| `GET` | `/health` | Liveness and model readiness probe |
+| `GET` | `/health` | Process liveness — always `200` while serving |
+| `GET` | `/ready` | Deployment readiness — `200` only when both champions are loaded, otherwise `503` |
 | `GET` | `/model-info` | Champion model metadata (safe fields only) |
 | `POST` | `/predict/reef-health` | Single reef-health prediction |
 | `POST` | `/predict/restoration` | Single restoration-suitability prediction |
 | `POST` | `/predict/both` | Both predictions for one observation |
 | `POST` | `/predict/batch` | Batch predictions (max 50 observations) |
+
+#### Liveness versus readiness
+
+The two probes answer different questions and are deliberately allowed to disagree:
+
+| | `/health` | `/ready` |
+|---|---|---|
+| Question | Is the process alive? | Can it actually serve predictions? |
+| Both models loaded | `200`, `status: ok` | `200`, `ready: true` |
+| A model failed to load | `200`, `status: degraded` | `503`, `ready: false` |
+| Intended consumer | Restart policy | Traffic routing / container health |
+
+`/health` stays `200` when degraded so an orchestrator does not restart a running
+instance that is merely missing a model. `/ready` is what gates traffic, and it is
+what the API container's Docker health check probes — so a container is "healthy"
+only once both champion pipelines have loaded from the checksum-verified bundle.
+Neither response contains a filesystem path, MLflow URI, configuration value, or
+traceback.
 
 ### Example request
 
@@ -552,6 +572,57 @@ The `Makefile` also provides demo targets:
 make demo           # preflight + start + verify
 make demo-stop      # stop all services
 ```
+
+---
+
+## Deployment Architecture
+
+Two distinct configurations share the same images.
+
+### Local demonstration stack
+
+Docker Compose, described above. Four services: `mlflow` (tracking UI), `api`,
+`dashboard`, and the optional `drift` profile. The dashboard bind-mounts
+`data/raw/` and `reports/` from the host so a local `make drift` run shows up
+without a rebuild; the canonical `artifacts/mlruns.db` is mounted **read-only**
+and is never modified.
+
+### Production serving architecture
+
+Public serving needs neither MLflow nor DVC at runtime:
+
+| Concern | Production behaviour |
+|---|---|
+| Model loading | `CORALSENSE_MODEL_MODE=bundle` — the API loads the champion pipelines from the checksum-verified bundle baked into the image at `deploy/bundles/`. No registry query, no MLflow connection, no network call. |
+| Model/data provenance | A CI release job restores artifacts with `dvc pull`, exports and verifies the champion bundle, then builds the images. Restoration happens **during image construction**, never at container start. |
+| Dashboard data | The dashboard image bakes in the read-only synthetic demo assets (`data/raw/observations.csv`, `models/evaluation_*.json`, `reports/drift_summary.json`), so it runs standalone with no bind mount. |
+| Dashboard → API | Server-to-server over `CORALSENSE_API_URL`. Set it to the API's full public HTTPS URL; no code change and no browser-side API call is involved. |
+| Credentials | Runtime containers hold **no** DagsHub or DVC credentials. `.dvc/`, `.dvc/config.local`, and `.env` are excluded from every build context by an allow-list `.dockerignore`. |
+| Listening port | Both images bind `0.0.0.0` on `${PORT}`, falling back to `8000` (API) and `8501` (dashboard). Hosting providers that inject `PORT` are supported without configuration. |
+| MLflow | Not required for public serving. It remains a local/CI experiment-tracking tool. |
+
+Planned, **not yet built**: a GitHub Actions release job publishing these images
+to GHCR, with Render running the prebuilt images. Render never receives
+DagsHub/DVC credentials. Nothing in this project is publicly deployed today.
+
+#### Build contexts
+
+The repository working tree is several hundred megabytes. Each serving image
+uses an allow-list build context that denies everything and re-includes only
+what that image copies:
+
+| File | Applies to | Admits |
+|---|---|---|
+| `.dockerignore` | shared baseline (and any non-BuildKit build) | union of all three images' needs |
+| `Dockerfile.api.dockerignore` | API (BuildKit) | source, `params.yaml`, packaging, `docker/`, `deploy/bundles/` |
+| `Dockerfile.dashboard.dockerignore` | dashboard (BuildKit) | source, packaging, `.streamlit/`, the static demo assets |
+
+BuildKit uses the Dockerfile-specific file *instead of* the root one rather than
+merging them, so all three are self-contained. The image-specific files enforce a
+separation the shared file cannot: the API context carries no dataset, and the
+dashboard context carries no model or bundle. `mlruns/`, `artifacts/`,
+`data/processed/`, `models/*.joblib`, `tests/`, `notebooks/`, `.venv/`, and all
+secret files stay out of every context.
 
 ---
 

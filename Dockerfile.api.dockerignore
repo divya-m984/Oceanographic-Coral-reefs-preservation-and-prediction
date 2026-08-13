@@ -1,0 +1,48 @@
+# Dockerfile.api.dockerignore — build context for the API serving image.
+#
+# BuildKit uses this file INSTEAD OF the root .dockerignore when building with
+# `-f Dockerfile.api` (it does not merge with it), so this file is deliberately
+# self-contained.
+#
+# Strategy: deny everything, then re-include only what Dockerfile.api copies.
+# The repository working tree is several hundred megabytes (mlruns/, DVC cache,
+# processed data, .venv); an allow-list keeps all of it out by construction
+# rather than by remembering to add each new exclusion.
+#
+# The API serves in BUNDLE mode: it needs the checksum-verified deployment
+# bundle and nothing else.  No dataset, no MLflow database, no mlruns/, no DVC
+# metadata, and no credential file ever enters this context.
+
+# ── Deny everything ───────────────────────────────────────────────────────────
+**
+
+# ── Re-include only what the image needs ─────────────────────────────────────
+# Inference and application source
+!src/
+# Runtime configuration read by src/config.py
+!params.yaml
+# Package metadata for `pip install --no-deps -e .`
+!pyproject.toml
+# Dependency pins for the build stage
+!requirements.txt
+# Container entrypoint helpers (init_mlflow.sh, init_drift.sh)
+!docker/
+# Checksum-verified champion bundle — the only model artifact in the image
+!deploy/bundles/
+
+# ── Re-exclude anything unwanted that the rules above would pull back in ─────
+# Caches and build residue under src/
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/*.egg-info/
+# Secrets must never enter the context, under any circumstances
+.env
+**/.env
+.dvc/
+.dvc/config.local
+*.pem
+*.key
+# Editor and OS noise
+**/.DS_Store
+**/*.swp

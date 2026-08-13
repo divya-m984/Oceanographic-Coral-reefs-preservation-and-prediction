@@ -196,6 +196,11 @@ def health_unavailable_loader() -> FakeModelLoader:
     return FakeModelLoader(health_ready=False, restoration_ready=True)
 
 
+@pytest.fixture()
+def restoration_unavailable_loader() -> FakeModelLoader:
+    return FakeModelLoader(health_ready=True, restoration_ready=False)
+
+
 def _make_client(loader: FakeModelLoader) -> TestClient:
     """Return a TestClient with the given loader injected (no lifespan)."""
     app.dependency_overrides[get_loader] = lambda: loader
@@ -281,6 +286,102 @@ class TestHealthEndpoint:
         data = client.get("/health").json()
         assert "timestamp" in data
         assert "T" in data["timestamp"]  # ISO 8601
+
+
+# ---------------------------------------------------------------------------
+# Readiness endpoint (deployment hardening)
+# ---------------------------------------------------------------------------
+
+
+class TestReadyEndpoint:
+    """``/ready`` gates traffic; ``/health`` only reports process liveness."""
+
+    def test_ready_returns_200_when_both_models_loaded(self, client: TestClient) -> None:
+        r = client.get("/ready")
+        assert r.status_code == 200
+        assert r.json()["ready"] is True
+
+    def test_ready_reports_both_models(self, client: TestClient) -> None:
+        data = client.get("/ready").json()
+        assert data["health_model_ready"] is True
+        assert data["restoration_model_ready"] is True
+
+    def test_ready_returns_503_when_health_model_unavailable(
+        self, health_unavailable_loader: FakeModelLoader
+    ) -> None:
+        app.dependency_overrides[get_loader] = lambda: health_unavailable_loader
+        try:
+            r = TestClient(app, raise_server_exceptions=False).get("/ready")
+            assert r.status_code == 503
+            data = r.json()
+            assert data["ready"] is False
+            assert data["health_model_ready"] is False
+            assert data["restoration_model_ready"] is True
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_ready_returns_503_when_restoration_model_unavailable(
+        self, restoration_unavailable_loader: FakeModelLoader
+    ) -> None:
+        app.dependency_overrides[get_loader] = lambda: restoration_unavailable_loader
+        try:
+            r = TestClient(app, raise_server_exceptions=False).get("/ready")
+            assert r.status_code == 503
+            data = r.json()
+            assert data["ready"] is False
+            assert data["health_model_ready"] is True
+            assert data["restoration_model_ready"] is False
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_ready_returns_503_when_both_models_unavailable(
+        self, client_no_models: TestClient
+    ) -> None:
+        r = client_no_models.get("/ready")
+        assert r.status_code == 503
+        assert r.json()["ready"] is False
+
+    def test_ready_has_timestamp(self, client: TestClient) -> None:
+        data = client.get("/ready").json()
+        assert "timestamp" in data
+        assert "T" in data["timestamp"]  # ISO 8601
+
+    def test_health_still_200_while_ready_is_503(self, client_no_models: TestClient) -> None:
+        """The two endpoints must disagree when degraded — that is the point."""
+        assert client_no_models.get("/health").status_code == 200
+        assert client_no_models.get("/ready").status_code == 503
+
+    @pytest.mark.parametrize("degraded", [False, True])
+    def test_ready_body_leaks_no_internal_details(self, degraded: bool) -> None:
+        """No path, URI, secret, or traceback may reach a public probe."""
+        loader = FakeModelLoader(health_ready=not degraded, restoration_ready=not degraded)
+        app.dependency_overrides[get_loader] = lambda: loader
+        try:
+            body = TestClient(app, raise_server_exceptions=False).get("/ready").text
+        finally:
+            app.dependency_overrides.clear()
+        lowered = body.lower()
+        for leak in ("/app", "/home", "/users", "sqlite", "mlflow", "mlruns", "artifacts"):
+            assert leak not in lowered, f"readiness body leaked {leak!r}"
+        for leak in ("traceback", "deploy/bundles", ".joblib", "password", "secret", "token"):
+            assert leak not in lowered, f"readiness body leaked {leak!r}"
+
+    def test_ready_body_keys_are_exactly_the_contract(self, client: TestClient) -> None:
+        assert set(client.get("/ready").json()) == {
+            "ready",
+            "health_model_ready",
+            "restoration_model_ready",
+            "timestamp",
+        }
+
+    def test_ready_advertised_on_root(self, client: TestClient) -> None:
+        endpoints = client.get("/").json()["endpoints"]
+        assert any("/ready" in e for e in endpoints)
+
+    def test_ready_documented_in_openapi(self, client: TestClient) -> None:
+        paths = client.get("/openapi.json").json()["paths"]
+        assert "/ready" in paths
+        assert "503" in paths["/ready"]["get"]["responses"]
 
 
 # ---------------------------------------------------------------------------

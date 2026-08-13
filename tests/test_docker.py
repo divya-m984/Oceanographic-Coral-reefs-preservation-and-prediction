@@ -578,3 +578,452 @@ class TestStartMlflowScript:
         compose_text = _COMPOSE.read_text()
         assert "artifacts" in compose_text
         assert "mlruns.db" in compose_text or "mlruns" in compose_text
+
+
+# ---------------------------------------------------------------------------
+# Deployment hardening — cloud PORT, /ready health check, standalone assets,
+# and per-Dockerfile build-context isolation.
+#
+# All structural and offline: no daemon, no build, no network, no credentials.
+# ---------------------------------------------------------------------------
+
+_IGNORE_API = _ROOT / "Dockerfile.api.dockerignore"
+_IGNORE_DASHBOARD = _ROOT / "Dockerfile.dashboard.dockerignore"
+
+# Files that must never reach any serving-image build context.
+_FORBIDDEN_CONTEXT_PATHS = (
+    ".env",
+    ".dvc/",
+    ".dvc/config.local",
+)
+
+
+@pytest.fixture(scope="module")
+def ignore_api_text() -> str:
+    return _IGNORE_API.read_text()
+
+
+@pytest.fixture(scope="module")
+def ignore_dashboard_text() -> str:
+    return _IGNORE_DASHBOARD.read_text()
+
+
+def _instructions(text: str) -> str:
+    """Return only the effective lines of a Dockerfile/ignore file.
+
+    Comments are prose about intent — asserting against them tests the wording,
+    not the build.  These checks care about what Docker actually executes.
+    """
+    return "\n".join(
+        ln for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")
+    )
+
+
+def _cmd_line(dockerfile_text: str) -> str:
+    """Return the CMD instruction (joined across line continuations)."""
+    joined = dockerfile_text.replace("\\\n", " ")
+    for line in joined.splitlines():
+        if line.startswith("CMD"):
+            return line
+    raise AssertionError("no CMD instruction found")
+
+
+def _healthcheck_line(dockerfile_text: str) -> str:
+    """Return the HEALTHCHECK instruction (joined across line continuations)."""
+    joined = dockerfile_text.replace("\\\n", " ")
+    for line in joined.splitlines():
+        if line.startswith("HEALTHCHECK"):
+            return line
+    raise AssertionError("no HEALTHCHECK instruction found")
+
+
+class TestApiCloudPort:
+    """The API image binds 0.0.0.0 on ${PORT}, falling back to 8000."""
+
+    def test_cmd_honours_injected_port(self, dockerfile_api_text):
+        cmd = _cmd_line(dockerfile_api_text)
+        assert "${PORT:-8000}" in cmd, f"API CMD must honour ${{PORT}}, got: {cmd}"
+
+    def test_cmd_binds_all_interfaces(self, dockerfile_api_text):
+        assert "--host 0.0.0.0" in _cmd_line(dockerfile_api_text)
+
+    def test_cmd_is_shell_form_so_port_expands(self, dockerfile_api_text):
+        """An exec-form CMD would pass the literal string '${PORT:-8000}'."""
+        cmd = _cmd_line(dockerfile_api_text)
+        assert "/bin/sh" in cmd and "-c" in cmd
+
+    def test_local_default_port_declared(self, dockerfile_api_text):
+        assert re.search(r"^\s*PORT=8000", dockerfile_api_text, re.MULTILINE)
+
+    def test_dead_api_host_port_env_removed(self, dockerfile_api_text):
+        """API_HOST/API_PORT were never read by the entrypoint."""
+        assert not re.search(r"^\s*API_HOST=", dockerfile_api_text, re.MULTILINE)
+        assert not re.search(r"^\s*API_PORT=", dockerfile_api_text, re.MULTILINE)
+
+    def test_main_module_prefers_coralsense_port_then_port(self):
+        source = (_ROOT / "src" / "api" / "main.py").read_text()
+        assert 'os.getenv("CORALSENSE_PORT")' in source
+        assert 'os.getenv("PORT")' in source
+
+
+class TestDashboardCloudPort:
+    """The dashboard image binds 0.0.0.0 on ${PORT}, falling back to 8501."""
+
+    def test_cmd_honours_injected_port(self, dockerfile_dashboard_text):
+        cmd = _cmd_line(dockerfile_dashboard_text)
+        assert "${PORT:-8501}" in cmd, f"dashboard CMD must honour ${{PORT}}, got: {cmd}"
+
+    def test_cmd_binds_all_interfaces(self, dockerfile_dashboard_text):
+        assert "--server.address 0.0.0.0" in _cmd_line(dockerfile_dashboard_text)
+
+    def test_cmd_is_shell_form_so_port_expands(self, dockerfile_dashboard_text):
+        cmd = _cmd_line(dockerfile_dashboard_text)
+        assert "/bin/sh" in cmd and "-c" in cmd
+
+    def test_local_default_port_declared(self, dockerfile_dashboard_text):
+        assert re.search(r"^\s*PORT=8501", dockerfile_dashboard_text, re.MULTILINE)
+
+    def test_no_duplicate_streamlit_port_env(self, dockerfile_dashboard_text):
+        """The CMD sets the port; a second STREAMLIT_SERVER_PORT would shadow it."""
+        assert not re.search(r"^\s*STREAMLIT_SERVER_PORT=", dockerfile_dashboard_text, re.MULTILINE)
+
+
+class TestApiReadinessHealthCheck:
+    """The container is healthy only when inference is actually available."""
+
+    def test_dockerfile_healthcheck_targets_ready(self, dockerfile_api_text):
+        hc = _healthcheck_line(dockerfile_api_text)
+        assert "/ready" in hc, f"API HEALTHCHECK must probe /ready, got: {hc}"
+        assert "/health" not in hc
+
+    def test_dockerfile_healthcheck_honours_port(self, dockerfile_api_text):
+        assert "${PORT:-8000}" in _healthcheck_line(dockerfile_api_text)
+
+    def test_compose_api_healthcheck_targets_ready(self, compose):
+        test = " ".join(str(x) for x in compose["services"]["api"]["healthcheck"]["test"])
+        assert "/ready" in test
+        assert "/health" not in test
+
+    def test_health_endpoint_still_served(self):
+        """/health must remain as the process-liveness endpoint."""
+        source = (_ROOT / "src" / "api" / "main.py").read_text()
+        assert '@app.get("/health"' in source
+        assert '"/ready"' in source
+
+    def test_dashboard_healthcheck_unchanged_target(self, dockerfile_dashboard_text):
+        """The dashboard has no models; it keeps Streamlit's own health path."""
+        assert "_stcore/health" in _healthcheck_line(dockerfile_dashboard_text)
+
+
+class TestDashboardStandaloneAssets:
+    """Required demo assets are baked in, so the image needs no bind mount."""
+
+    #: (path copied into the image, why it is required)
+    _REQUIRED = (
+        "data/raw/observations.csv",
+        "models/evaluation_health.json",
+        "models/evaluation_restoration.json",
+    )
+
+    @pytest.mark.parametrize("asset", _REQUIRED)
+    def test_required_asset_copied(self, asset, dockerfile_dashboard_text):
+        copies = [
+            ln for ln in dockerfile_dashboard_text.splitlines() if ln.strip().startswith("COPY")
+        ]
+        assert any(asset in ln for ln in copies), f"{asset} must be COPYed into the image"
+
+    def test_optional_drift_summary_copied(self, dockerfile_dashboard_text):
+        assert "reports/drift_summary.json" in dockerfile_dashboard_text
+
+    def test_streamlit_config_copied(self, dockerfile_dashboard_text):
+        assert ".streamlit/" in dockerfile_dashboard_text
+
+    def test_params_copied_for_config_module(self, dockerfile_dashboard_text):
+        """Page 8 calls get_config(), which reads params.yaml."""
+        assert "params.yaml" in dockerfile_dashboard_text
+
+    def test_no_model_artifacts_in_dashboard_image(self, dockerfile_dashboard_text):
+        """The dashboard predicts via the API only — never load a model here."""
+        assert ".joblib" not in dockerfile_dashboard_text
+        assert "deploy/bundles" not in dockerfile_dashboard_text
+
+    def test_no_mlflow_database_in_dashboard_image(self, dockerfile_dashboard_text):
+        assert "mlruns.db" not in dockerfile_dashboard_text
+        assert "artifacts/" not in dockerfile_dashboard_text
+
+    def test_dashboard_does_not_run_dvc_at_runtime(self, dockerfile_dashboard_text):
+        """No DVC command may appear in any executed instruction."""
+        instructions = _instructions(dockerfile_dashboard_text).lower()
+        for forbidden in ("dvc pull", "dvc fetch", "dvc checkout", "dvc repro", "dagshub"):
+            assert forbidden not in instructions
+
+    def test_dashboard_source_never_invokes_dvc(self):
+        """No dashboard module may shell out to DVC while serving."""
+        offenders = []
+        for path in sorted((_ROOT / "src" / "dashboard").rglob("*.py")):
+            text = path.read_text()
+            if "dvc" in text.lower() and ("subprocess" in text or "os.system" in text):
+                offenders.append(path.name)
+        assert not offenders, f"dashboard modules invoking DVC: {offenders}"
+
+    def test_dashboard_does_not_generate_or_train(self, dockerfile_dashboard_text):
+        instructions = _instructions(dockerfile_dashboard_text)
+        for forbidden in ("generate_data", "train", "--promote", "fit_transform"):
+            assert forbidden not in instructions
+
+    def test_synthetic_disclaimer_preserved(self, dockerfile_dashboard_text):
+        assert "SYNTHETIC-DATA DISCLAIMER" in dockerfile_dashboard_text
+
+
+class TestApiBundleModeIsMlflowFree:
+    """Bundle mode must stay deterministic and independent of MLflow."""
+
+    def test_bundle_loader_does_not_import_mlflow(self):
+        source = (_ROOT / "src" / "api" / "bundle_loader.py").read_text()
+        assert "import mlflow" not in source
+        assert "from mlflow" not in source
+
+    def test_bundle_loader_verifies_checksums(self):
+        source = (_ROOT / "src" / "api" / "bundle_loader.py").read_text()
+        assert "sha256" in source
+        assert "_verify_checksum" in source
+
+    def test_model_loader_has_no_silent_fallback_to_registry(self):
+        """A failed bundle load must NOT quietly become a registry load.
+
+        Parsed structurally: the mode branch must be a plain if/else, never a
+        try/except that swallows a bundle failure and retries the registry.
+        """
+        import ast
+
+        source = (_ROOT / "src" / "api" / "model_loader.py").read_text()
+        func = next(
+            node
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.FunctionDef) and node.name == "_load_pipeline"
+        )
+        assert not [n for n in ast.walk(func) if isinstance(n, ast.Try)], (
+            "_load_pipeline must not catch bundle failures and fall back to the registry"
+        )
+        constructed = {
+            n.func.id
+            for n in ast.walk(func)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        }
+        assert constructed == {"BundleInferencePipeline", "InferencePipeline"}
+
+    def test_api_image_pins_bundle_mode(self, dockerfile_api_text):
+        assert "CORALSENSE_MODEL_MODE=bundle" in dockerfile_api_text
+
+    def test_compose_api_does_not_depend_on_mlflow(self, compose):
+        assert "depends_on" not in compose["services"]["api"]
+
+
+class TestServingBuildContexts:
+    """Per-Dockerfile ignore files keep each serving context minimal and safe."""
+
+    def test_ignore_files_exist(self):
+        assert _IGNORE_API.exists()
+        assert _IGNORE_DASHBOARD.exists()
+
+    @pytest.mark.parametrize("name", ["api", "dashboard"])
+    def test_context_denies_everything_by_default(
+        self, name, ignore_api_text, ignore_dashboard_text
+    ):
+        text = ignore_api_text if name == "api" else ignore_dashboard_text
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+        assert "**" in lines, f"{name} context must start from a deny-all rule"
+
+    @pytest.mark.parametrize("secret", _FORBIDDEN_CONTEXT_PATHS)
+    def test_api_context_excludes_secrets(self, secret, ignore_api_text):
+        assert secret in ignore_api_text
+        assert f"!{secret}" not in ignore_api_text
+
+    @pytest.mark.parametrize("secret", _FORBIDDEN_CONTEXT_PATHS)
+    def test_dashboard_context_excludes_secrets(self, secret, ignore_dashboard_text):
+        assert secret in ignore_dashboard_text
+        assert f"!{secret}" not in ignore_dashboard_text
+
+    @pytest.mark.parametrize(
+        "never",
+        ["mlruns", "artifacts/", ".venv", "notebooks", "tests", ".git"],
+    )
+    def test_serving_contexts_never_re_include_bulk_or_vcs(
+        self, never, ignore_api_text, ignore_dashboard_text
+    ):
+        """Deny-all covers these; the point is that nothing negates them back in."""
+        for text in (ignore_api_text, ignore_dashboard_text):
+            assert f"!{never}" not in text
+
+    def test_api_context_includes_only_expected_paths(self, ignore_api_text):
+        included = {
+            ln.strip().lstrip("!")
+            for ln in ignore_api_text.splitlines()
+            if ln.strip().startswith("!")
+        }
+        assert included == {
+            "src/",
+            "params.yaml",
+            "pyproject.toml",
+            "requirements.txt",
+            "docker/",
+            "deploy/bundles/",
+        }
+
+    def test_api_context_has_no_dataset_or_model_files(self, ignore_api_text):
+        for absent in ("observations.csv", "evaluation_", ".joblib"):
+            assert f"!{absent}" not in ignore_api_text
+
+    def test_dashboard_context_re_includes_required_assets(self, ignore_dashboard_text):
+        for asset in (
+            "!data/raw/observations.csv",
+            "!models/evaluation_health.json",
+            "!models/evaluation_restoration.json",
+            "!reports/drift_summary.json",
+        ):
+            assert asset in ignore_dashboard_text
+
+    def test_dashboard_context_re_includes_parent_dirs_of_assets(self, ignore_dashboard_text):
+        """Docker will not descend into a directory no rule re-includes."""
+        for parent in ("!data/", "!data/raw/", "!models/", "!reports/"):
+            assert parent in ignore_dashboard_text
+
+    def test_dashboard_context_excludes_model_binaries(self, ignore_dashboard_text):
+        assert "models/*.joblib" in ignore_dashboard_text
+        assert "!models/best_model" not in ignore_dashboard_text
+
+    def test_dashboard_context_excludes_bundle(self, ignore_dashboard_text):
+        assert "!deploy" not in ignore_dashboard_text
+
+    def test_root_dockerignore_serves_mlflow_build(self, dockerignore_text):
+        """Dockerfile.mlflow has no specific ignore file, so the root file must
+        still admit everything it copies — only docker/init_mlflow.sh and
+        requirements.txt.  The canonical DB is bind-mounted, never baked."""
+        mlflow_text = _DOCKERFILE_MLFLOW.read_text()
+        copied = [ln for ln in _instructions(mlflow_text).splitlines() if ln.startswith("COPY")]
+        assert copied, "Dockerfile.mlflow should copy at least the init script"
+        assert all("artifacts" not in ln and "mlruns" not in ln for ln in copied), (
+            f"mlflow image must not bake MLflow state, got: {copied}"
+        )
+        rules = {ln.strip() for ln in _instructions(dockerignore_text).splitlines()}
+        assert "!docker/" in rules
+        assert "!requirements.txt" in rules
+
+    def test_root_dockerignore_excludes_mlflow_bulk(self, dockerignore_text):
+        """~367 MB of mlruns/ must not be shipped to any build context."""
+        rules = {ln.strip() for ln in _instructions(dockerignore_text).splitlines()}
+        assert {"artifacts/", "mlruns/"} <= rules
+        assert "!artifacts/" not in rules
+        assert "!mlruns/" not in rules
+
+    def test_root_dockerignore_is_allow_list(self, dockerignore_text):
+        rules = [ln.strip() for ln in _instructions(dockerignore_text).splitlines()]
+        assert rules[0] == "**", "root context must start from a deny-all rule"
+
+    def test_root_dockerignore_admits_every_copied_path(self, dockerignore_text):
+        """Every path the serving Dockerfiles COPY must be re-included here,
+        because the legacy (non-BuildKit) builder only reads this file."""
+        rules = {ln.strip() for ln in _instructions(dockerignore_text).splitlines()}
+        for required in (
+            "!src/",
+            "!params.yaml",
+            "!pyproject.toml",
+            "!requirements.txt",
+            "!docker/",
+            "!.streamlit/",
+            "!deploy/bundles/",
+            "!data/raw/observations.csv",
+            "!models/evaluation_health.json",
+            "!models/evaluation_restoration.json",
+            "!reports/drift_summary.json",
+        ):
+            assert required in rules, f"root .dockerignore must re-include {required}"
+
+    def test_root_dockerignore_excludes_secrets(self, dockerignore_text):
+        rules = {ln.strip() for ln in _instructions(dockerignore_text).splitlines()}
+        for secret in (".env", ".dvc/", ".dvc/config.local", "*.pem", "*.key"):
+            assert secret in rules
+            assert f"!{secret}" not in rules
+
+    def test_root_dockerignore_excludes_tests_and_notebooks(self, dockerignore_text):
+        rules = {ln.strip() for ln in _instructions(dockerignore_text).splitlines()}
+        assert {"tests/", "notebooks/", ".venv/", "models/*.joblib"} <= rules
+
+
+class TestDashboardApiUrlConfigurable:
+    """CORALSENSE_API_URL stays the single, externally settable API address."""
+
+    def test_client_reads_env_var(self):
+        source = (_ROOT / "src" / "dashboard" / "api_client.py").read_text()
+        assert 'os.getenv("CORALSENSE_API_URL"' in source
+
+    def test_client_default_is_local(self):
+        from src.dashboard.api_client import _DEFAULT_BASE_URL
+
+        assert _DEFAULT_BASE_URL == "http://127.0.0.1:8000"
+
+    def test_https_url_is_accepted_without_code_change(self, monkeypatch):
+        from src.dashboard.api_client import APIClient
+
+        monkeypatch.setenv("CORALSENSE_API_URL", "https://example-api.invalid")
+        assert APIClient().base_url == "https://example-api.invalid"
+
+    def test_trailing_slash_normalised(self, monkeypatch):
+        from src.dashboard.api_client import APIClient
+
+        monkeypatch.setenv("CORALSENSE_API_URL", "https://example-api.invalid/")
+        assert APIClient().base_url == "https://example-api.invalid"
+
+    def test_compose_sets_service_url(self, compose):
+        env = compose["services"]["dashboard"]["environment"]
+        assert env["CORALSENSE_API_URL"] == "http://api:8000"
+
+    def test_no_hardcoded_hosting_provider_hostname(self):
+        """No Render (or other provider) hostname may be baked into the repo."""
+        targets = [
+            _ROOT / "src" / "dashboard" / "api_client.py",
+            _ROOT / "Dockerfile.dashboard",
+            _ROOT / "docker-compose.yml",
+        ]
+        for path in targets:
+            text = path.read_text().lower()
+            assert "onrender.com" not in text
+            assert "render.com" not in text
+
+
+class TestComposeWiringStillValid:
+    """Local Compose demonstration stack keeps working after hardening."""
+
+    def test_api_and_dashboard_services_present(self, compose):
+        assert {"api", "dashboard"} <= set(compose["services"])
+
+    def test_api_publishes_container_port_8000(self, compose):
+        assert any("8000" in str(p) for p in compose["services"]["api"]["ports"])
+
+    def test_dashboard_publishes_container_port_8501(self, compose):
+        assert any("8501" in str(p) for p in compose["services"]["dashboard"]["ports"])
+
+    def test_dashboard_still_waits_for_healthy_api(self, compose):
+        dep = compose["services"]["dashboard"]["depends_on"]
+        assert dep["api"]["condition"] == "service_healthy"
+
+    def test_api_keeps_bundle_mode_env(self, compose):
+        env = compose["services"]["api"]["environment"]
+        assert env["CORALSENSE_MODEL_MODE"] == "bundle"
+
+    def test_no_port_env_var_leaks_into_compose_services(self, compose):
+        """A global PORT would be applied to every service at once."""
+        for name, svc in compose["services"].items():
+            env = svc.get("environment") or {}
+            assert "PORT" not in env, f"service {name} must not pin PORT"
+
+    def test_compose_has_no_dvc_or_dagshub_configuration(self):
+        text = _COMPOSE.read_text().lower()
+        for forbidden in ("dagshub", "dvc pull", "dvc push", "access_key_id", "secret_access_key"):
+            assert forbidden not in text
+
+    def test_compose_mounts_no_credential_file(self, compose):
+        for name, svc in compose["services"].items():
+            for vol in svc.get("volumes", []):
+                assert "config.local" not in str(vol), f"service {name} mounts a credential file"
+                assert ".env" not in str(vol), f"service {name} mounts an env file"

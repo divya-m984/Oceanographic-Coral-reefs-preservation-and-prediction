@@ -1,29 +1,110 @@
-# .dockerignore — Files excluded from the Docker build context.
+# .dockerignore — Default exclusions for the Docker build context.
 #
-# Goal: keep build context small, safe, and free of secrets.
+# Goal: keep every build context small, safe, and free of secrets.
+#
+# SCOPE
+# -----
+# This is the shared baseline.  It is the effective policy for Dockerfile.mlflow
+# (which has no specific ignore file) and for any builder that does not support
+# per-Dockerfile ignore files — notably the legacy, non-BuildKit builder.  The
+# two serving images additionally declare stricter, image-specific contexts:
+#
+#   Dockerfile.api.dockerignore        — source + params + verified bundle only
+#   Dockerfile.dashboard.dockerignore  — source + static demo assets only
+#
+# BuildKit uses the Dockerfile-specific file INSTEAD OF this one (they are not
+# merged), so all three files are self-contained.  Those two express a
+# separation this shared file cannot: the API context must carry no dataset,
+# and the dashboard context must carry no model or bundle.
+#
+# STRATEGY
+# --------
+# Deny everything, then re-include the union of what the three Dockerfiles
+# actually copy.  The working tree is several hundred megabytes (mlruns/ alone
+# is ~367 MB); an allow-list keeps that out by construction rather than by
+# remembering to exclude each new artifact directory.
+#
+# Dockerfile.mlflow copies only docker/init_mlflow.sh — the canonical database
+# is bind-mounted read-only at runtime, never baked into an image.
 
-# Version control
+# ── Deny everything ───────────────────────────────────────────────────────────
+**
+
+# ── Application source and packaging (all images) ────────────────────────────
+!src/
+!params.yaml
+!pyproject.toml
+!requirements.txt
+!docker/
+!.streamlit/
+!.env.example
+
+# ── API image: the checksum-verified champion bundle ─────────────────────────
+!deploy/bundles/
+
+# ── Dashboard image: read-only synthetic demonstration assets ────────────────
+# Restored by `dvc pull` in CI before the build.  Parent directories must be
+# re-included too, or Docker will not descend into them.
+!data/
+!data/raw/
+!data/raw/observations.csv
+!models/
+!models/evaluation_health.json
+!models/evaluation_restoration.json
+!reports/
+!reports/drift_summary.json
+
+# ── Re-exclusions: never let the rules above pull these back in ──────────────
+# Version control and DVC metadata
 .git/
 .gitignore
 .dvc/
 .dvcignore
+
+# DVC cache (large, never needed in a container)
+.dvc/cache/
+.dvc/tmp/
+
+# Secrets — must never enter any build context
+.env
+**/.env
+.dvc/config.local
+*.pem
+*.key
 
 # Virtual environments (dependencies are installed inside the image)
 .venv/
 venv/
 env/
 
-# Secrets and local config
-.env
-!.env.example
+# Trained artefacts: models are served from deploy/bundles/, never copied loose
+models/*.joblib
+data/processed/
+data/reference/
+data/production/
+
+# MLflow database and runs — mounted at runtime by the mlflow service only
+artifacts/
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Full Evidently HTML reports (large; page 8 only checks whether they exist)
+reports/*.html
 
 # Python caches
-__pycache__/
-*.py[cod]
-*.so
-*.egg-info/
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/*.egg-info/
 dist/
 build/
+coralsense_mlops.egg-info/
+
+# Tests, notebooks and documentation are not needed in serving images
+tests/
+notebooks/
+docs/
 
 # Test caches and coverage
 .pytest_cache/
@@ -31,44 +112,19 @@ build/
 htmlcov/
 .tox/
 
-# MLflow runtime files (NOT the canonical DB which is needed by Dockerfile.mlflow)
-mlartifacts/
-mlflow.db
-
-# DVC cache (large, not needed in containers)
-.dvc/cache/
-.dvc/tmp/
-
-# Local editor and OS files
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-# Notebooks (not needed in serving images)
-notebooks/
-
-# Documentation build artefacts
-docs/
-
-# Raw / processed data (large, mounted as volumes or not needed in API image)
-data/raw/
-data/processed/
-data/reference/
-data/production/
+# CI temp artefacts
+ci_mlruns.db
+ci_check_mlruns.db
 
 # Log files
 *.log
 logs/
 
-# Claude / AI assistant files
+# Local editor, OS and assistant files
+.idea/
+.vscode/
+**/*.swp
+**/*.swo
+**/.DS_Store
+Thumbs.db
 .claude/
-
-# CI temp artefacts
-ci_mlruns.db
-ci_check_mlruns.db
-
-# Coralsense egg-info
-coralsense_mlops.egg-info/
