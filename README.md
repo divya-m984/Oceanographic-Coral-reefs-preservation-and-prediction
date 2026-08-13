@@ -498,6 +498,8 @@ When intentionally publishing newly versioned DVC objects:
 dvc push -r dagshub
 ```
 
+The read-only preflight (`make preflight`) audits this configuration. Three checks are blocking: `dvc[s3]` must be installed, the tracked `.dvc/config` must declare the `dagshub` remote with the expected URL and endpoint, and no credential fields may have leaked into that tracked config. The `.dvc/config.local` check is blocking only when the file is *unsafe* — tracked by Git or not Git-ignored; a missing `.dvc/config.local` is reported as a warning, since a collaborator may simply not have configured credentials yet. Preflight then runs a time-boxed, read-only `dvc status --remote dagshub`; missing credentials, unreachable network, and unsynchronised objects are reported as warnings, so preflight stays usable offline. Preflight never pushes, pulls, reproduces, or writes credentials, and never prints credential values.
+
 ---
 
 ## Running the Complete Application

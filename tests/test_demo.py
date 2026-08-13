@@ -3,6 +3,7 @@ tests/test_demo.py — Tests for M14 release-readiness tools.
 
 Coverage:
 - Preflight tool: success path, blocking failures, warnings, JSON output, exit codes
+- Preflight DVC remote: DagsHub remote config, S3 support, credential hygiene, sync
 - Demo orchestrator: status, shutdown, bounded polling
 - Evidence manifest: schema, title, no absolute paths, immutability
 - Makefile: target presence, no promotion commands
@@ -16,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -61,7 +63,9 @@ def _run(args: list[str], *, env: dict | None = None) -> subprocess.CompletedPro
         text=True,
         cwd=str(_ROOT),
         env=full_env,
-        timeout=30,
+        # Generous: preflight performs a time-boxed read-only DVC remote status
+        # probe, which is slow on a congested network before it warns.
+        timeout=180,
     )
 
 
@@ -309,6 +313,503 @@ class TestPreflightDocker:
             assert check.is_warning  # Docker missing = warning, not blocking failure
 
 
+# ── DVC / DagsHub remote preflight ─────────────────────────────────────────────
+
+_GOOD_DVC_CONFIG = """['remote "dagshub"']
+    url = s3://dvc
+    endpointurl = https://dagshub.com/divya-m984/Oceanographic-Coral-reefs-preservation-and-prediction.s3
+"""
+
+_FAKE_TOKEN = "0123456789abcdef0123456789abcdef01234567"
+
+
+def _write_config(tmp_path: Path, text: str, name: str = "config") -> Path:
+    path = tmp_path / name
+    path.write_text(text)
+    return path
+
+
+# Structural patterns for credential leakage.  The suite never reads the
+# developer's real .dvc/config.local, so no assertion can ever print a secret.
+_CREDENTIAL_ASSIGNMENT = re.compile(
+    r"(?i)(access_key_id|secret_access_key|session_token|password|auth_token)\s*[:=]\s*[^\s*\"]"
+)
+_URL_USERINFO = re.compile(r"://[^\s/@\"]+:[^\s/@\"]+@")
+
+
+def _completed(returncode: int = 0, stdout: str = "", stderr: str = ""):
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+class TestPreflightDVCRemoteConfig:
+    """The tracked DagsHub remote must be present and materially correct."""
+
+    def test_repository_remote_config_passes(self):
+        pf = _import_preflight()
+        report = pf.PreflightReport()
+        pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert check.passed, check.message
+
+    def test_valid_config_passes(self, tmp_path):
+        pf = _import_preflight()
+        cfg = _write_config(tmp_path, _GOOD_DVC_CONFIG)
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert check.passed
+
+    def test_config_parsing_tolerates_formatting(self, tmp_path):
+        """Quoting, spacing and key case must not change the verdict."""
+        pf = _import_preflight()
+        text = (
+            '[remote "dagshub"]\n'
+            "URL=s3://dvc/\n"
+            "EndpointURL = https://dagshub.com/divya-m984/"
+            "Oceanographic-Coral-reefs-preservation-and-prediction.s3\n"
+        )
+        cfg = _write_config(tmp_path, text)
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert check.passed, check.message
+
+    def test_missing_remote_fails(self, tmp_path):
+        pf = _import_preflight()
+        cfg = _write_config(tmp_path, "['remote \"origin\"']\n    url = s3://other\n")
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert not check.passed
+        assert not check.is_warning  # blocking
+
+    def test_missing_config_file_fails(self, tmp_path):
+        pf = _import_preflight()
+        with patch.object(pf, "DVC_TRACKED_CONFIG", tmp_path / "absent"):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert not check.passed
+        assert not check.is_warning
+
+    def test_wrong_url_fails(self, tmp_path):
+        pf = _import_preflight()
+        cfg = _write_config(tmp_path, _GOOD_DVC_CONFIG.replace("s3://dvc", "s3://wrong-bucket"))
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert not check.passed
+        assert not check.is_warning
+
+    def test_wrong_endpoint_fails(self, tmp_path):
+        pf = _import_preflight()
+        cfg = _write_config(
+            tmp_path,
+            _GOOD_DVC_CONFIG.replace("https://dagshub.com", "https://evil.example.com"),
+        )
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert not check.passed
+        assert not check.is_warning
+
+    def test_non_canonical_endpoint_key_fails(self, tmp_path):
+        """Only DVC's canonical ``endpointurl`` key counts as a configured endpoint."""
+        pf = _import_preflight()
+        cfg = _write_config(tmp_path, _GOOD_DVC_CONFIG.replace("endpointurl", "endpoint_url"))
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert not check.passed
+        assert not check.is_warning
+
+    def test_missing_endpoint_fails(self, tmp_path):
+        pf = _import_preflight()
+        cfg = _write_config(tmp_path, "['remote \"dagshub\"']\n    url = s3://dvc\n")
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_config(report)
+        check = next(c for c in report.checks if c.name == "dvc_remote_config")
+        assert not check.passed
+
+
+class TestPreflightDVCS3Support:
+    def test_s3_support_present_passes(self):
+        pf = _import_preflight()
+        with patch.object(pf.importlib.util, "find_spec", return_value=object()):
+            report = pf.PreflightReport()
+            pf.check_dvc_s3_support(report)
+        check = next(c for c in report.checks if c.name == "dvc_s3_support")
+        assert check.passed
+
+    def test_s3_support_absent_is_blocking_failure(self):
+        pf = _import_preflight()
+        with patch.object(pf.importlib.util, "find_spec", return_value=None):
+            report = pf.PreflightReport()
+            pf.check_dvc_s3_support(report)
+        check = next(c for c in report.checks if c.name == "dvc_s3_support")
+        assert not check.passed
+        assert not check.is_warning  # remote cannot function without it
+
+    def test_installed_environment_has_s3_support(self):
+        pf = _import_preflight()
+        report = pf.PreflightReport()
+        pf.check_dvc_s3_support(report)
+        check = next(c for c in report.checks if c.name == "dvc_s3_support")
+        assert check.passed, "dvc[s3] must be installed for the DagsHub remote"
+
+
+class TestPreflightDVCTrackedConfigCredentials:
+    def test_clean_tracked_config_passes(self, tmp_path):
+        pf = _import_preflight()
+        cfg = _write_config(tmp_path, _GOOD_DVC_CONFIG)
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_tracked_config_credentials(report)
+        check = next(c for c in report.checks if c.name == "dvc_tracked_config_clean")
+        assert check.passed
+
+    def test_repository_tracked_config_is_clean(self):
+        pf = _import_preflight()
+        report = pf.PreflightReport()
+        pf.check_dvc_tracked_config_credentials(report)
+        check = next(c for c in report.checks if c.name == "dvc_tracked_config_clean")
+        assert check.passed, "tracked .dvc/config must never contain credentials"
+
+    @pytest.mark.parametrize("key", ["access_key_id", "secret_access_key"])
+    def test_tracked_credentials_are_blocking_failure(self, tmp_path, key):
+        pf = _import_preflight()
+        cfg = _write_config(tmp_path, _GOOD_DVC_CONFIG + f"    {key} = {_FAKE_TOKEN}\n")
+        with patch.object(pf, "DVC_TRACKED_CONFIG", cfg):
+            report = pf.PreflightReport()
+            pf.check_dvc_tracked_config_credentials(report)
+        check = next(c for c in report.checks if c.name == "dvc_tracked_config_clean")
+        assert not check.passed
+        assert not check.is_warning
+        assert key in check.message  # the field name is named...
+        assert _FAKE_TOKEN not in check.message  # ...but never its value
+        assert _FAKE_TOKEN not in check.detail
+
+    def test_credential_scan_returns_names_only(self, tmp_path):
+        pf = _import_preflight()
+        cfg = _write_config(tmp_path, _GOOD_DVC_CONFIG + f"    access_key_id = {_FAKE_TOKEN}\n")
+        assert pf._config_credential_keys(cfg) == ["access_key_id"]
+
+    def test_credential_scan_on_missing_file(self, tmp_path):
+        pf = _import_preflight()
+        assert pf._config_credential_keys(tmp_path / "absent") == []
+
+
+class TestPreflightDVCLocalConfigSafety:
+    def test_missing_local_config_is_warning(self, tmp_path):
+        pf = _import_preflight()
+        with patch.object(pf, "DVC_LOCAL_CONFIG", tmp_path / "config.local"):
+            report = pf.PreflightReport()
+            pf.check_dvc_local_config_safety(report)
+        check = next(c for c in report.checks if c.name == "dvc_local_config")
+        assert not check.passed
+        assert check.is_warning  # a collaborator may simply have no credentials yet
+
+    def test_ignored_and_untracked_local_config_passes(self, tmp_path):
+        pf = _import_preflight()
+        local = _write_config(tmp_path, f"    access_key_id = {_FAKE_TOKEN}\n", "config.local")
+        with (
+            patch.object(pf, "DVC_LOCAL_CONFIG", local),
+            patch.object(pf, "_git_ignores", return_value=True),
+            patch.object(pf, "_git_tracks", return_value=False),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_local_config_safety(report)
+        check = next(c for c in report.checks if c.name == "dvc_local_config")
+        assert check.passed
+        assert _FAKE_TOKEN not in check.message + check.detail
+        # The check inspects Git status only; it must not claim what the file holds.
+        assert "credential" not in check.message.lower()
+        assert "exists" in check.message and "Git-ignored" in check.message
+
+    def test_tracked_local_config_is_blocking_failure(self, tmp_path):
+        pf = _import_preflight()
+        local = _write_config(tmp_path, "    access_key_id = x\n", "config.local")
+        with (
+            patch.object(pf, "DVC_LOCAL_CONFIG", local),
+            patch.object(pf, "_git_ignores", return_value=True),
+            patch.object(pf, "_git_tracks", return_value=True),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_local_config_safety(report)
+        check = next(c for c in report.checks if c.name == "dvc_local_config")
+        assert not check.passed
+        assert not check.is_warning
+        assert "tracked by Git" in check.message
+
+    def test_non_ignored_local_config_is_blocking_failure(self, tmp_path):
+        pf = _import_preflight()
+        local = _write_config(tmp_path, "    access_key_id = x\n", "config.local")
+        with (
+            patch.object(pf, "DVC_LOCAL_CONFIG", local),
+            patch.object(pf, "_git_ignores", return_value=False),
+            patch.object(pf, "_git_tracks", return_value=False),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_local_config_safety(report)
+        check = next(c for c in report.checks if c.name == "dvc_local_config")
+        assert not check.passed
+        assert not check.is_warning
+        assert "not Git-ignored" in check.message
+
+    def test_git_unavailable_is_warning(self, tmp_path):
+        pf = _import_preflight()
+        local = _write_config(tmp_path, "    access_key_id = x\n", "config.local")
+        with (
+            patch.object(pf, "DVC_LOCAL_CONFIG", local),
+            patch.object(pf, "_git_ignores", return_value=None),
+            patch.object(pf, "_git_tracks", return_value=None),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_local_config_safety(report)
+        check = next(c for c in report.checks if c.name == "dvc_local_config")
+        assert not check.passed
+        assert check.is_warning
+
+    def test_repository_local_config_is_never_tracked(self):
+        """Whatever the developer's state, Git must not track the credential file."""
+        pf = _import_preflight()
+        assert pf._git_tracks(pf.DVC_LOCAL_CONFIG) is False
+
+    def test_git_ignores_uses_repository_relative_path(self):
+        pf = _import_preflight()
+        with patch.object(pf.subprocess, "run", return_value=_completed(0)) as run:
+            pf._git_ignores(pf.DVC_LOCAL_CONFIG)
+        argv = run.call_args[0][0]
+        assert argv[:4] == ["git", "check-ignore", "-q", "--"]
+        assert argv[4] == ".dvc/config.local"  # repo-relative, not an absolute host path
+
+    def test_git_tracks_uses_repository_relative_path(self):
+        pf = _import_preflight()
+        with patch.object(pf.subprocess, "run", return_value=_completed(0)) as run:
+            pf._git_tracks(pf.DVC_TRACKED_CONFIG)
+        argv = run.call_args[0][0]
+        assert argv == ["git", "ls-files", "--", ".dvc/config"]
+
+    def test_repo_relative_falls_back_for_outside_paths(self, tmp_path):
+        """A path outside the repository is passed through unchanged, not mangled."""
+        pf = _import_preflight()
+        outside = tmp_path / "config.local"
+        assert pf._repo_relative(outside) == str(outside)
+        assert pf._repo_relative(pf.DVC_LOCAL_CONFIG) == ".dvc/config.local"
+
+
+class TestPreflightDVCRemoteSync:
+    """The remote probe is read-only and degrades to warnings, never crashes."""
+
+    def _sync_check(self, pf, report):
+        return next(c for c in report.checks if c.name == "dvc_remote_sync")
+
+    def test_in_sync_passes(self):
+        pf = _import_preflight()
+        out = "Cache and remote 'dagshub' are in sync.\n"
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=True),
+            patch.object(pf.subprocess, "run", return_value=_completed(0, out)) as run,
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)
+        check = self._sync_check(pf, report)
+        assert check.passed
+        argv = run.call_args[0][0]
+        assert "status" in argv and "--remote" in argv and "dagshub" in argv
+
+    def test_no_credentials_skips_network_and_warns(self):
+        pf = _import_preflight()
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=False),
+            patch.object(pf.subprocess, "run") as run,
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)
+        check = self._sync_check(pf, report)
+        assert not check.passed
+        assert check.is_warning
+        run.assert_not_called()  # no network call without credentials
+
+    def test_timeout_is_warning_not_crash(self):
+        pf = _import_preflight()
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=True),
+            patch.object(
+                pf.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(cmd="dvc", timeout=30),
+            ),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)  # must not raise
+        check = self._sync_check(pf, report)
+        assert not check.passed
+        assert check.is_warning
+
+    def test_dvc_binary_missing_is_warning(self):
+        pf = _import_preflight()
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=True),
+            patch.object(pf.subprocess, "run", side_effect=FileNotFoundError),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)
+        check = self._sync_check(pf, report)
+        assert not check.passed
+        assert check.is_warning
+
+    def test_authentication_failure_is_warning(self):
+        pf = _import_preflight()
+        stderr = f"ERROR: unable to authenticate: access_key_id={_FAKE_TOKEN}\n"
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=True),
+            patch.object(pf.subprocess, "run", return_value=_completed(1, "", stderr)),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)
+        check = self._sync_check(pf, report)
+        assert not check.passed
+        assert check.is_warning
+        assert _FAKE_TOKEN not in check.message + check.detail
+
+    def test_subprocess_output_is_redacted(self):
+        """Credential-shaped DVC output is redacted before it reaches the report."""
+        pf = _import_preflight()
+        stderr = (
+            f"ERROR: https://user:{_FAKE_TOKEN}@dagshub.com/dvc rejected "
+            f"secret_access_key={_FAKE_TOKEN}\n"
+        )
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=True),
+            patch.object(pf.subprocess, "run", return_value=_completed(1, "", stderr)),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)
+        check = self._sync_check(pf, report)
+        surfaced = check.message + check.detail
+        assert _FAKE_TOKEN not in surfaced
+        assert not _CREDENTIAL_ASSIGNMENT.search(surfaced)
+        assert not _URL_USERINFO.search(surfaced)
+
+    def test_network_failure_is_warning(self):
+        pf = _import_preflight()
+        stderr = "ERROR: failed to connect to dagshub.com: Name or service not known\n"
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=True),
+            patch.object(pf.subprocess, "run", return_value=_completed(1, "", stderr)),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)
+        check = self._sync_check(pf, report)
+        assert not check.passed
+        assert check.is_warning
+
+    def test_out_of_sync_is_warning_not_blocking(self):
+        pf = _import_preflight()
+        out = "new: data/raw/observations.csv\n"
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=True),
+            patch.object(pf.subprocess, "run", return_value=_completed(0, out)),
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)
+        check = self._sync_check(pf, report)
+        assert not check.passed
+        assert check.is_warning  # must not block the demonstration
+
+    def test_credentials_detected_from_environment(self, tmp_path, monkeypatch):
+        pf = _import_preflight()
+        monkeypatch.setenv("AWS_ACCESS_KEY_ID", _FAKE_TOKEN)
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", _FAKE_TOKEN)
+        with patch.object(pf, "DVC_LOCAL_CONFIG", tmp_path / "absent"):
+            assert pf._local_credentials_configured() is True
+
+    def test_no_credentials_anywhere(self, tmp_path, monkeypatch):
+        pf = _import_preflight()
+        monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+        monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+        with patch.object(pf, "DVC_LOCAL_CONFIG", tmp_path / "absent"):
+            assert pf._local_credentials_configured() is False
+
+
+class TestPreflightReadOnlyInvariant:
+    """The extended preflight must never mutate state or publish objects."""
+
+    _SOURCE = (_ROOT / "scripts" / "preflight.py").read_text()
+
+    def test_no_mutating_dvc_subcommands_invoked(self):
+        """AST scan: no subprocess call may pass push/pull/repro as an argument."""
+        import ast
+
+        forbidden = {"push", "pull", "repro", "add", "commit", "gc", "checkout"}
+        tree = ast.parse(self._SOURCE)
+        offenders = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            attr = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if attr not in {"run", "Popen", "call", "check_call", "check_output"}:
+                continue
+            for arg in ast.walk(node):
+                if isinstance(arg, ast.Constant) and arg.value in forbidden:
+                    offenders.append((attr, arg.value, node.lineno))
+        assert not offenders, f"preflight invokes mutating subcommands: {offenders}"
+
+    def test_remote_sync_uses_status_only(self):
+        pf = _import_preflight()
+        with (
+            patch.object(pf, "_local_credentials_configured", return_value=True),
+            patch.object(pf.subprocess, "run", return_value=_completed(0, "are in sync")) as run,
+        ):
+            report = pf.PreflightReport()
+            pf.check_dvc_remote_sync(report)
+        argv = run.call_args[0][0]
+        assert "status" in argv
+        for forbidden in ("push", "pull", "repro"):
+            assert forbidden not in argv
+
+    def test_no_dvc_config_writes(self):
+        """No write path may target the DVC config files."""
+        assert "config.local" in self._SOURCE  # the file is inspected...
+        for writer in ("write_text(", "open(DVC_", "unlink(", "dvc remote modify"):
+            assert writer not in self._SOURCE, f"preflight contains a write path: {writer}"
+
+    def test_dvc_config_files_unchanged_by_preflight(self):
+        def digest(path: Path) -> str:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        tracked = _ROOT / ".dvc" / "config"
+        local = _ROOT / ".dvc" / "config.local"
+        before = (digest(tracked), digest(local) if local.exists() else None)
+        _run([_PYTHON, "scripts/preflight.py", "--json"])
+        after = (digest(tracked), digest(local) if local.exists() else None)
+        assert before == after, "preflight modified DVC configuration"
+
+    def test_redaction_removes_secrets(self):
+        pf = _import_preflight()
+        samples = [
+            f"access_key_id={_FAKE_TOKEN}",
+            f"secret_access_key = {_FAKE_TOKEN}",
+            f"https://user:{_FAKE_TOKEN}@dagshub.com/x.s3",
+            _FAKE_TOKEN,
+        ]
+        for sample in samples:
+            assert _FAKE_TOKEN not in pf._redact(sample), sample
+
+    def test_redaction_removes_local_paths(self):
+        pf = _import_preflight()
+        assert str(_ROOT) not in pf._redact(f"failed at {_ROOT}/data/raw")
+
+
 class TestPreflightCLI:
     def test_exit_code_0_on_success(self):
         result = _run([_PYTHON, "scripts/preflight.py"])
@@ -342,6 +843,30 @@ class TestPreflightCLI:
         except json.JSONDecodeError:
             is_json = False
         assert not is_json
+
+    def test_json_contains_dvc_remote_checks(self):
+        result = _run([_PYTHON, "scripts/preflight.py", "--json"])
+        names = {c["name"] for c in json.loads(result.stdout)["checks"]}
+        assert {
+            "dvc_s3_support",
+            "dvc_remote_config",
+            "dvc_tracked_config_clean",
+            "dvc_local_config",
+            "dvc_remote_sync",
+        } <= names
+
+    def test_json_output_contains_no_credentials(self):
+        """The JSON report must never carry a credential assignment or userinfo URL."""
+        result = _run([_PYTHON, "scripts/preflight.py", "--json"])
+        blob = json.dumps(json.loads(result.stdout))
+        assert not _CREDENTIAL_ASSIGNMENT.search(blob)
+        assert not _URL_USERINFO.search(blob)
+
+    def test_human_output_contains_no_credentials(self):
+        result = _run([_PYTHON, "scripts/preflight.py"])
+        combined = result.stdout + result.stderr
+        assert not _CREDENTIAL_ASSIGNMENT.search(combined)
+        assert not _URL_USERINFO.search(combined)
 
     def test_no_absolute_paths_in_output(self):
         """Preflight output should not leak absolute home directory paths."""

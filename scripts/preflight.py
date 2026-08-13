@@ -2,9 +2,13 @@
 """
 scripts/preflight.py — Oceanographic MLOps read-only preflight checker.
 
-Verifies the project environment, data integrity, and registry state before
-a classroom demonstration.  Never trains, registers, promotes, or modifies
-any project artifact.
+Verifies the project environment, data integrity, registry state, and the
+DagsHub-backed DVC remote configuration before a classroom demonstration.
+
+Strictly read-only: it never trains, registers, promotes, rolls back, runs
+`dvc repro`/`dvc push`/`dvc pull`, writes credentials, or modifies any
+project artifact.  Credential values are never read into the report — only
+credential *field names* and Git ignore/track status are inspected.
 
 Usage:
     python scripts/preflight.py           # human-readable output
@@ -18,8 +22,12 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import configparser
 import hashlib
+import importlib.util
 import json
+import os
+import re
 import socket
 import subprocess
 import sys
@@ -67,6 +75,38 @@ REGISTERED_MODELS = {
     "coralsense_reef_health": {"champion_version": "1", "min_versions": 4},
     "coralsense_restoration_suitability": {"champion_version": "1", "min_versions": 4},
 }
+
+# ── DagsHub-backed DVC remote (reproducibility + credential hygiene) ───────────
+DVC_TRACKED_CONFIG = _ROOT / ".dvc" / "config"
+DVC_LOCAL_CONFIG = _ROOT / ".dvc" / "config.local"
+
+DVC_REMOTE_NAME = "dagshub"
+DVC_REMOTE_URL = "s3://dvc"
+DVC_REMOTE_ENDPOINT = (
+    "https://dagshub.com/divya-m984/Oceanographic-Coral-reefs-preservation-and-prediction.s3"
+)
+# DVC's canonical S3 endpoint key.  Config keys are matched case-insensitively,
+# so a hand-written ``EndpointURL`` still normalises to this name.
+DVC_ENDPOINT_KEY = "endpointurl"
+# The pip extra that supplies the S3-compatible backend DagsHub requires.
+DVC_S3_MODULE = "dvc_s3"
+
+# Credential field names that must never appear in the tracked .dvc/config.
+DVC_CREDENTIAL_KEYS = frozenset(
+    {
+        "access_key_id",
+        "secret_access_key",
+        "session_token",
+        "password",
+        "token",
+        "auth_token",
+    }
+)
+
+# ``dvc status --remote`` is read-only but talks to the network; the demo
+# preflight must stay usable offline, so it is time-boxed and degrades to a
+# warning.
+DVC_REMOTE_STATUS_TIMEOUT = 30
 
 DVC_EXPECTED_STAGES = {
     "generate",
@@ -389,6 +429,365 @@ def check_dvc(report: PreflightReport) -> None:
         _check(report, "dvc_stages", False, "", "DVC dag timed out", warning=True)
 
 
+# ── DVC remote helpers (credential-safe) ───────────────────────────────────────
+def _redact(text: str) -> str:
+    """Strip anything credential-shaped (and local paths) from tool output.
+
+    Applied to every byte of DVC/Git output that reaches a message, a detail
+    field, the JSON report, or the terminal.
+    """
+    if not text:
+        return ""
+    # scheme://user:secret@host  →  scheme://***@host
+    text = re.sub(r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@]+:[^\s/@]+@", r"\1***@", text)
+    # key = value / key=value for any credential-shaped key
+    text = re.sub(
+        r"(?i)\b(\w*(?:access_key_id|secret_access_key|session_token|password|token|secret)\w*)"
+        r"\s*[:=]\s*\S+",
+        r"\1=***",
+        text,
+    )
+    # Bare long opaque tokens (DagsHub tokens are 40-char hex).
+    text = re.sub(r"\b[0-9a-fA-F]{20,}\b", "***", text)
+    # Never leak absolute local paths into the report.
+    text = text.replace(str(_ROOT), ".").replace(str(Path.home()), "~")
+    return text
+
+
+def _summarise(result_stdout: str, result_stderr: str, limit: int = 200) -> str:
+    """Build a short, redacted one-line summary of a subprocess result."""
+    raw = (result_stderr or result_stdout or "").strip()
+    first_lines = " / ".join(line.strip() for line in raw.splitlines()[:2] if line.strip())
+    return _redact(first_lines)[:limit]
+
+
+def _config_credential_keys(path: Path) -> list[str]:
+    """Return the *names* of credential fields present in a DVC config file.
+
+    Only the text to the left of the first ``=`` on each line is inspected;
+    everything to the right is discarded immediately.  No credential value is
+    ever returned, stored, logged, or serialised — this function exists purely
+    so the preflight can answer "are credentials present?" without handling
+    them.
+    """
+    if not path.exists():
+        return []
+    try:
+        raw = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    found: set[str] = set()
+    for line in raw.splitlines():
+        head, sep, _ = line.partition("=")
+        if not sep:
+            continue
+        key = head.strip().strip("'\"").lower()
+        if key in DVC_CREDENTIAL_KEYS:
+            found.add(key)
+    return sorted(found)
+
+
+def _remote_section_name(section: str) -> str | None:
+    """Extract the remote name from a DVC config section header.
+
+    DVC writes remote sections as ``['remote "dagshub"']``; quoting and
+    spacing are normalised here so the check does not depend on exact
+    formatting.
+    """
+    s = section.strip()
+    for quote in ("'", '"'):
+        if len(s) >= 2 and s.startswith(quote) and s.endswith(quote):
+            s = s[1:-1].strip()
+            break
+    match = re.fullmatch(r"remote\s+(.+)", s, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1).strip().strip("'\"").strip() or None
+
+
+def _parse_dvc_remotes(path: Path) -> dict[str, dict[str, str]]:
+    """Parse the *tracked* DVC config into ``{remote_name: {key: value}}``.
+
+    The tracked file is read directly rather than through ``dvc config
+    --list`` because the audit target is exactly what Git records: the merged
+    runtime configuration would silently include ``.dvc/config.local``
+    credentials.  Parsing is done with :mod:`configparser` so quoting,
+    spacing, key case, and section order are all tolerated.
+    """
+    if not path.exists():
+        return {}
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        parser.read_string(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, configparser.Error):
+        return {}
+    remotes: dict[str, dict[str, str]] = {}
+    for section in parser.sections():
+        name = _remote_section_name(section)
+        if name is None:
+            continue
+        remotes[name] = {key.strip().lower(): value.strip() for key, value in parser.items(section)}
+    return remotes
+
+
+def _normalise_url(value: str) -> str:
+    return value.strip().rstrip("/")
+
+
+def _git_query(args: list[str]) -> subprocess.CompletedProcess | None:
+    """Run a read-only Git command, or return ``None`` if Git is unusable."""
+    try:
+        return subprocess.run(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=str(_ROOT),
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def _repo_relative(path: Path) -> str:
+    """Path as Git sees it: relative to the repository root where possible.
+
+    Git commands run with ``cwd`` at the project root, so a repository-relative
+    pathspec is both correct and free of absolute host paths.
+    """
+    try:
+        return path.resolve().relative_to(_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _git_ignores(path: Path) -> bool | None:
+    result = _git_query(["check-ignore", "-q", "--", _repo_relative(path)])
+    if result is None or result.returncode not in (0, 1):
+        return None
+    return result.returncode == 0
+
+
+def _git_tracks(path: Path) -> bool | None:
+    result = _git_query(["ls-files", "--", _repo_relative(path)])
+    if result is None or result.returncode != 0:
+        return None
+    return bool(result.stdout.strip())
+
+
+def _local_credentials_configured() -> bool:
+    """Whether DagsHub credentials appear to be available locally.
+
+    Detection is by credential *field name* or environment-variable presence
+    only; no value is ever read into the report.
+    """
+    if os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"):
+        return True
+    return bool(_config_credential_keys(DVC_LOCAL_CONFIG))
+
+
+# ── DVC remote checks ──────────────────────────────────────────────────────────
+def check_dvc_s3_support(report: PreflightReport) -> None:
+    """The DagsHub remote is S3-compatible; without dvc[s3] it cannot function."""
+    try:
+        available = importlib.util.find_spec(DVC_S3_MODULE) is not None
+    except (ImportError, ValueError):
+        available = False
+    _check(
+        report,
+        "dvc_s3_support",
+        available,
+        "DVC S3 remote support available (dvc[s3])",
+        f"DVC S3 support missing — remote '{DVC_REMOTE_NAME}' cannot function; "
+        "install: pip install 'dvc[s3]>=3.50'",
+    )
+
+
+def check_dvc_remote_config(report: PreflightReport) -> None:
+    """The tracked DVC config must declare the expected DagsHub remote."""
+    if not DVC_TRACKED_CONFIG.exists():
+        _check(
+            report,
+            "dvc_remote_config",
+            False,
+            "",
+            "Tracked .dvc/config is missing — the DagsHub remote is not configured",
+        )
+        return
+
+    remotes = _parse_dvc_remotes(DVC_TRACKED_CONFIG)
+    remote = remotes.get(DVC_REMOTE_NAME)
+    if remote is None:
+        _check(
+            report,
+            "dvc_remote_config",
+            False,
+            "",
+            f"Tracked .dvc/config declares no remote named '{DVC_REMOTE_NAME}' "
+            f"(found: {sorted(remotes) or 'none'})",
+        )
+        return
+
+    problems: list[str] = []
+    url = _normalise_url(remote.get("url", ""))
+    if url != _normalise_url(DVC_REMOTE_URL):
+        problems.append(f"url is '{url or 'unset'}', expected '{DVC_REMOTE_URL}'")
+
+    endpoint = _normalise_url(remote.get(DVC_ENDPOINT_KEY, ""))
+    if endpoint != _normalise_url(DVC_REMOTE_ENDPOINT):
+        problems.append(f"endpoint is '{endpoint or 'unset'}', expected the DagsHub S3 endpoint")
+
+    _check(
+        report,
+        "dvc_remote_config",
+        not problems,
+        f"DVC remote '{DVC_REMOTE_NAME}' configured for DagsHub ({DVC_REMOTE_URL})",
+        f"DVC remote '{DVC_REMOTE_NAME}' is misconfigured: {'; '.join(problems)}",
+        detail=DVC_REMOTE_ENDPOINT if problems else "",
+    )
+
+
+def check_dvc_tracked_config_credentials(report: PreflightReport) -> None:
+    """Credentials must never reach the Git-tracked DVC config."""
+    keys = _config_credential_keys(DVC_TRACKED_CONFIG)
+    _check(
+        report,
+        "dvc_tracked_config_clean",
+        not keys,
+        "Tracked .dvc/config contains no credential fields",
+        f"SECURITY: tracked .dvc/config contains credential field(s): {', '.join(keys)} — "
+        "move them to .dvc/config.local (Git-ignored) and rotate the exposed credentials",
+    )
+
+
+def check_dvc_local_config_safety(report: PreflightReport) -> None:
+    """``.dvc/config.local`` may hold credentials; Git must never see it."""
+    if not DVC_LOCAL_CONFIG.exists():
+        _check(
+            report,
+            "dvc_local_config",
+            False,
+            "",
+            "No .dvc/config.local — DagsHub credentials are not configured locally; "
+            "remote synchronisation cannot be verified (see README: DVC remote access)",
+            warning=True,
+        )
+        return
+
+    ignored = _git_ignores(DVC_LOCAL_CONFIG)
+    tracked = _git_tracks(DVC_LOCAL_CONFIG)
+
+    if ignored is None or tracked is None:
+        _check(
+            report,
+            "dvc_local_config",
+            False,
+            "",
+            "Could not verify .dvc/config.local against Git — confirm manually that it is "
+            "ignored and untracked",
+            warning=True,
+        )
+        return
+
+    problems: list[str] = []
+    if tracked:
+        problems.append("tracked by Git")
+    if not ignored:
+        problems.append("not Git-ignored")
+
+    _check(
+        report,
+        "dvc_local_config",
+        not problems,
+        "Local DVC config .dvc/config.local exists and is Git-ignored and untracked",
+        f"SECURITY: .dvc/config.local is {' and '.join(problems)} — remove it from Git "
+        "and rotate the exposed credentials",
+    )
+
+
+def check_dvc_remote_sync(report: PreflightReport) -> None:
+    """Read-only ``dvc status --remote`` probe.
+
+    Never pushes, pulls, or reproduces anything.  Offline, unauthenticated,
+    and out-of-sync states are warnings so the demo preflight stays usable
+    without network access.
+    """
+    name = "dvc_remote_sync"
+    if not _local_credentials_configured():
+        _check(
+            report,
+            name,
+            False,
+            "",
+            f"Remote '{DVC_REMOTE_NAME}' sync check skipped — no local credentials configured",
+            warning=True,
+        )
+        return
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "dvc", "status", "--remote", DVC_REMOTE_NAME],
+            capture_output=True,
+            text=True,
+            timeout=DVC_REMOTE_STATUS_TIMEOUT,
+            cwd=str(_ROOT),
+        )
+    except subprocess.TimeoutExpired:
+        _check(
+            report,
+            name,
+            False,
+            "",
+            f"Remote '{DVC_REMOTE_NAME}' status timed out after "
+            f"{DVC_REMOTE_STATUS_TIMEOUT}s — continuing offline",
+            warning=True,
+        )
+        return
+    except (FileNotFoundError, OSError):
+        _check(
+            report,
+            name,
+            False,
+            "",
+            "DVC command unavailable — remote synchronisation not verified",
+            warning=True,
+        )
+        return
+
+    stdout = result.stdout or ""
+    if result.returncode != 0:
+        _check(
+            report,
+            name,
+            False,
+            "",
+            f"Remote '{DVC_REMOTE_NAME}' unreachable or authentication failed — continuing offline",
+            warning=True,
+            detail=_summarise(stdout, result.stderr or ""),
+        )
+        return
+
+    if "in sync" in stdout.lower():
+        _check(
+            report,
+            name,
+            True,
+            f"Cache and remote '{DVC_REMOTE_NAME}' are in sync",
+            "",
+        )
+        return
+
+    _check(
+        report,
+        name,
+        False,
+        "",
+        f"Remote '{DVC_REMOTE_NAME}' reports unsynchronised objects — "
+        f"run 'dvc push -r {DVC_REMOTE_NAME}' when publishing intentionally",
+        warning=True,
+        detail=_summarise(stdout, ""),
+    )
+
+
 def check_canonical_db(report: PreflightReport) -> None:
     ok = CANONICAL_DB.exists()
     _check(
@@ -544,6 +943,11 @@ def run_preflight() -> PreflightReport:
     check_dataset(report)
     check_dataset_checksum(report)
     check_dvc(report)
+    check_dvc_s3_support(report)
+    check_dvc_remote_config(report)
+    check_dvc_tracked_config_credentials(report)
+    check_dvc_local_config_safety(report)
+    check_dvc_remote_sync(report)
     check_canonical_db(report)
     check_champion_aliases(report)
     check_model_artifacts(report)
