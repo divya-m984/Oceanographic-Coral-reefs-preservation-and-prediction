@@ -8,7 +8,8 @@ Launch
 Endpoints
 ---------
     GET  /                      — Project index and documentation links.
-    GET  /health                — Service liveness and model readiness.
+    GET  /health                — Process liveness (always 200 while serving).
+    GET  /ready                 — Deployment readiness (503 unless both models load).
     GET  /model-info            — Champion model metadata (safe fields only).
     POST /predict/reef-health   — Single reef-health prediction.
     POST /predict/restoration   — Single restoration-suitability prediction.
@@ -37,7 +38,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import pandas as pd
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.model_loader import ModelLoader
@@ -49,6 +50,7 @@ from src.api.schemas import (
     ModelInfoResponse,
     ObservationInput,
     PredictionResponse,
+    ReadinessResponse,
     RootResponse,
     ServiceHealthResponse,
 )
@@ -60,7 +62,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _HOST: str = os.getenv("CORALSENSE_HOST", "127.0.0.1")
-_PORT: int = int(os.getenv("CORALSENSE_PORT", "8000"))
+# Cloud hosts (Render, Cloud Run, Heroku) inject the listening port as PORT.
+# Precedence: explicit CORALSENSE_PORT > provider-injected PORT > local default.
+_PORT: int = int(os.getenv("CORALSENSE_PORT") or os.getenv("PORT") or "8000")
 _LOG_LEVEL: str = os.getenv("CORALSENSE_LOG_LEVEL", "info").lower()
 _MAX_BATCH_SIZE: int = int(os.getenv("CORALSENSE_MAX_BATCH", "50"))
 
@@ -183,6 +187,7 @@ def root() -> dict[str, Any]:
         "endpoints": [
             "GET  /",
             "GET  /health",
+            "GET  /ready",
             "GET  /model-info",
             "POST /predict/reef-health",
             "POST /predict/restoration",
@@ -196,13 +201,41 @@ def root() -> dict[str, Any]:
 @app.get("/health", response_model=ServiceHealthResponse, tags=["Info"])
 def service_health(loader: LoaderDep) -> dict[str, Any]:
     """
-    Liveness and readiness probe.
+    Process **liveness** probe.
 
-    Returns 200 even when models are unavailable so that a container
-    orchestrator does not restart a running-but-degraded instance.
+    Always returns 200 while the process is serving, reporting ``degraded``
+    when a champion model is missing, so that a container orchestrator does
+    not restart a running-but-degraded instance.  Use ``GET /ready`` to gate
+    traffic on inference actually being available.
     """
     return {
         "status": "ok" if loader.is_ready else "degraded",
+        "health_model_ready": loader.health_ready,
+        "restoration_model_ready": loader.restoration_ready,
+        "timestamp": _now_iso(),
+    }
+
+
+@app.get(
+    "/ready",
+    response_model=ReadinessResponse,
+    tags=["Info"],
+    responses={503: {"model": ReadinessResponse, "description": "One or both models unavailable"}},
+)
+def service_ready(loader: LoaderDep, response: Response) -> dict[str, Any]:
+    """
+    Deployment **readiness** probe.
+
+    Returns 200 only when both champion pipelines are loaded, and 503 when
+    either is unavailable, so a hosting provider routes traffic only to
+    instances that can actually serve predictions.  The body is identical in
+    both cases and contains no path, URI, configuration value, or traceback.
+    """
+    ready = loader.is_ready
+    if not ready:
+        response.status_code = 503
+    return {
+        "ready": ready,
         "health_model_ready": loader.health_ready,
         "restoration_model_ready": loader.restoration_ready,
         "timestamp": _now_iso(),

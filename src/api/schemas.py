@@ -232,6 +232,22 @@ class ServiceHealthResponse(BaseModel):
     timestamp: str
 
 
+class ReadinessResponse(BaseModel):
+    """
+    Deployment-readiness status.
+
+    Distinct from :class:`ServiceHealthResponse`: this model backs ``GET /ready``,
+    which returns HTTP 503 unless *both* champion pipelines are loaded.  It
+    carries no filesystem path, MLflow URI, configuration value, or traceback,
+    so it is safe to expose publicly to a hosting provider's probe.
+    """
+
+    ready: bool
+    health_model_ready: bool
+    restoration_model_ready: bool
+    timestamp: str
+
+
 class RootResponse(BaseModel):
     """Root endpoint index."""
 

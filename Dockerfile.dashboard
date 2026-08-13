@@ -2,8 +2,25 @@
 #
 # The dashboard:
 #   - makes ALL predictions through the FastAPI service (no direct model loading)
-#   - reads synthetic observation data for visualisation (mounted read-only)
-#   - uses CORALSENSE_API_URL=http://api:8000 to reach the API container
+#   - reads synthetic observation data for visualisation (baked in, read-only)
+#   - uses CORALSENSE_API_URL to reach the API (http://api:8000 under Compose,
+#     a full HTTPS URL when deployed behind a hosting provider)
+#
+# Standalone runtime assets
+# -------------------------
+# The image bakes in the read-only synthetic demonstration assets so it runs
+# without host bind mounts.  A release workflow restores them with `dvc pull`
+# BEFORE calling `docker build`; the build itself never contacts DVC/DagsHub,
+# never trains, never generates data, and carries no credentials.  Compose
+# still bind-mounts the same paths locally, which simply overlays identical
+# host copies.
+#
+#   data/raw/observations.csv       required — every visualisation page
+#   models/evaluation_*.json        required — Model Performance / Overview
+#   reports/drift_summary.json      optional — Drift + Governance pages degrade
+#                                              gracefully when absent
+#
+# The dashboard contacts NO MLflow service and runs NO DVC command at runtime.
 #
 # SYNTHETIC-DATA DISCLAIMER
 # All visualisations and predictions are based on synthetic data only.
@@ -39,8 +56,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # Disable Streamlit telemetry and browser auto-open
     STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
     STREAMLIT_SERVER_HEADLESS=true \
-    STREAMLIT_SERVER_PORT=8501 \
-    STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    # Listening port.  Always bound on 0.0.0.0.  Cloud hosts such as Render
+    # inject their own PORT, which overrides this default at runtime; locally
+    # and under Docker Compose the value below keeps port 8501.  The server
+    # port/address are passed on the CMD line, so STREAMLIT_SERVER_PORT and
+    # STREAMLIT_SERVER_ADDRESS are deliberately not duplicated here.
+    PORT=8501
 
 WORKDIR /app
 
@@ -59,22 +80,25 @@ COPY .streamlit/ ./.streamlit/
 # Install local package
 RUN pip install --no-deps -e .
 
-# Create data directories — actual data files are bind-mounted at runtime
-RUN mkdir -p /app/data/raw /app/data/reference /app/reports \
-    && chown -R coralsense:coralsense /app
+# ── Read-only synthetic demonstration assets ─────────────────────────────────
+# Restored by `dvc pull` in CI before the build.  A missing required asset
+# fails the build rather than producing a silently broken dashboard image.
+COPY data/raw/observations.csv ./data/raw/observations.csv
+COPY models/evaluation_health.json models/evaluation_restoration.json ./models/
+# Optional: pages 8 and 9 render a "not found" notice when this is absent.
+COPY reports/drift_summary.json ./reports/
+
+RUN chown -R coralsense:coralsense /app
 
 USER coralsense
 
 EXPOSE 8501
 
+# Shell form so ${PORT} is expanded by /bin/sh at runtime.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c \
-        "import urllib.request, sys; \
-         r = urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=8); \
-         sys.exit(0 if r.status == 200 else 1)"
+    CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:'+'${PORT:-8501}'+'/_stcore/health', timeout=8).status == 200 else 1)"
 
-CMD ["streamlit", "run", "src/dashboard/app.py", \
-     "--server.port", "8501", \
-     "--server.address", "0.0.0.0", \
-     "--server.headless", "true", \
-     "--browser.gatherUsageStats", "false"]
+# Shell form so a hosting provider's injected ${PORT} is honoured; falls back
+# to 8501 locally.  exec keeps streamlit as PID 1 for correct signal handling.
+CMD ["/bin/sh", "-c", \
+     "exec streamlit run src/dashboard/app.py --server.port \"${PORT:-8501}\" --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false"]

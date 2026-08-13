@@ -48,9 +48,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # Bundle mode: load champion models from deploy/bundles/, not the registry.
     CORALSENSE_MODEL_MODE=bundle \
     CORALSENSE_BUNDLE_PATH=/app/deploy/bundles \
-    # API bind address inside the container
-    API_HOST=0.0.0.0 \
-    API_PORT=8000
+    # Listening port.  Always bound on 0.0.0.0.  Cloud hosts such as Render
+    # inject their own PORT, which overrides this default at runtime; locally
+    # and under Docker Compose the value below keeps port 8000.
+    PORT=8000
 
 WORKDIR /app
 
@@ -81,15 +82,19 @@ USER coralsense
 
 EXPOSE 8000
 
-# Health check via Python stdlib (no curl dependency)
+# Health check via Python stdlib (no curl dependency).
+#
+# Targets /ready, not /health: the container is only "healthy" once BOTH
+# champion pipelines have loaded from the checksum-verified bundle.  /ready
+# answers 503 while degraded, which urlopen raises on, so a bundle-integrity
+# failure keeps the container out of service instead of silently serving 503s.
+# /health remains available as the process-liveness endpoint.
+#
+# Shell form so ${PORT} is expanded by /bin/sh at runtime.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c \
-        "import urllib.request, sys; \
-         r = urllib.request.urlopen('http://localhost:8000/health', timeout=8); \
-         sys.exit(0 if r.status == 200 else 1)"
+    CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:'+'${PORT:-8000}'+'/ready', timeout=8).status == 200 else 1)"
 
-CMD ["uvicorn", "src.api.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "1", \
-     "--log-level", "info"]
+# Shell form so a hosting provider's injected ${PORT} is honoured; falls back
+# to 8000 locally.  exec keeps uvicorn as PID 1 for correct signal handling.
+CMD ["/bin/sh", "-c", \
+     "exec uvicorn src.api.main:app --host 0.0.0.0 --port \"${PORT:-8000}\" --workers 1 --log-level info"]
