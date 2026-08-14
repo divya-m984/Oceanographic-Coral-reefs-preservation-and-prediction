@@ -31,13 +31,18 @@ WORKDIR /build
 # when only source code changes.
 #
 # Dependency notes:
-#   - mlflow 3.14 metadata declares pandas<3, but works fine with pandas 2.x
-#     (packages are functionally compatible despite conservative metadata).
-#   - evidently 0.7 metadata declares plotly<6.  requirements.txt already carries
-#     the compatible range (plotly>=5.24,<6), so no override is needed here.
-COPY requirements.txt .
+#   - requirements-api.txt is the PUBLIC INFERENCE RUNTIME, not the full
+#     development environment.  requirements.txt (MLflow, DVC, Evidently, shap,
+#     Streamlit, pytest, ruff) is deliberately NOT installed here: bundle mode
+#     contacts no registry, runs no DVC command and computes no drift, so none
+#     of it is reachable from a prediction request.  See the header of
+#     requirements-api.txt for the per-package justification.
+#   - Every package needed to unpickle and execute BOTH champions is present:
+#     joblib, numpy, scikit-learn (health = LogisticRegression, plus both
+#     ColumnTransformers) and xgboost (restoration champion).
+COPY requirements-api.txt .
 RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install -r requirements-api.txt
 
 
 # ---------------------------------------------------------------------------

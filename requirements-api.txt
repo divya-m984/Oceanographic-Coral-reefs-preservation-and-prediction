@@ -1,0 +1,81 @@
+# requirements-api.txt — production runtime for the FastAPI inference image.
+#
+# SCOPE
+# -----
+# This file lists ONLY what src/api/* needs to serve predictions in BUNDLE mode
+# (CORALSENSE_MODEL_MODE=bundle).  It is installed by Dockerfile.api and by
+# nothing else.
+#
+#   requirements.txt            full MLOps/development environment (training,
+#                               MLflow, DVC, Evidently, dashboard, tests, lint).
+#                               Still the file used by CI and by the Makefile.
+#   requirements-api.txt        this file — public inference runtime.
+#   requirements-dashboard.txt  Streamlit runtime.
+#
+# Every entry below is justified by an actual import or by an unpickling
+# requirement of the exported champion bundle.  Version constraints follow the
+# corresponding constraints in requirements.txt unless the serving runtime
+# requires a deployment-specific package variant (for example xgboost-cpu).
+# Functional container tests verify compatability with the exported champions.
+#
+# DELIBERATELY ABSENT
+# -------------------
+#   mlflow      bundle mode contacts no registry; no bundle pickle references it
+#   dvc, dvc-s3 artefacts are restored in CI before `docker build`, never at
+#               container runtime
+#   evidently   drift analysis is a separate offline job, not an API concern
+#   streamlit,  dashboard-only; the API renders no UI
+#   plotly
+#   shap        explainability is a training/analysis concern, not serving
+#               (it also drags in numba + llvmlite, ~206 MB)
+#   pandera     schema validation runs in the DVC pipeline; the API validates
+#               with Pydantic instead
+#   httpx       only needed by fastapi.testclient in the test suite
+#   pytest,     development tooling
+#   ruff
+#
+# Python 3.12 (see Dockerfile.api).
+
+# ── Web framework and server ─────────────────────────────────────────────────
+# src/api/main.py: FastAPI, Depends, HTTPException, Request, Response, CORSMiddleware
+fastapi>=0.130
+# Dockerfile.api CMD: `uvicorn src.api.main:app`.  The [standard] extra keeps
+# the uvloop/httptools event loop used by the current image — same as
+# requirements.txt, so runtime behaviour is unchanged.
+uvicorn[standard]>=0.30
+# src/api/schemas.py: BaseModel, ConfigDict, Field, model_validator
+pydantic>=2.9
+
+# ── Inference data path ──────────────────────────────────────────────────────
+# src/api/main.py and src/api/bundle_loader.py build/consume DataFrames for
+# every prediction request.
+pandas>=2.0
+# src/api/bundle_loader.py imports numpy; the pickled preprocessor and both
+# champion payloads also reference numpy dtypes/arrays directly.
+numpy>=2.2
+
+# ── Champion deserialisation and execution ───────────────────────────────────
+# src/api/bundle_loader.py calls joblib.load() on payload.joblib and
+# preprocessor.joblib.
+joblib>=1.4
+# src/api/bundle_loader.py imports sklearn.utils.validation.check_is_fitted.
+# Both preprocessors are sklearn ColumnTransformers and the health champion is
+# a sklearn LogisticRegression, so sklearn classes appear in every bundle
+# pickle.  (scipy arrives transitively as a hard scikit-learn dependency and is
+# required by the sparse/array internals of the fitted preprocessor.)
+scikit-learn>=1.9
+# The restoration champion payload unpickles xgboost classes — verified by
+# scanning deploy/bundles/restoration/payload.joblib for GLOBAL opcodes.
+# xgboost-cpu is the upstream CPU-only distribution: it installs the SAME
+# `xgboost` module at the same version, but omits the nvidia-nccl-cu12
+# dependency (~400 MB of CUDA libraries) that the default wheel pulls in for
+# multi-GPU training.  The serving image never trains and never uses a GPU.
+xgboost-cpu>=3.0
+
+# ── Configuration ────────────────────────────────────────────────────────────
+# src/config.py: yaml.safe_load(params.yaml), read at API startup.
+pyyaml>=6.0
+# src/config._load_dotenv() imports dotenv inside a try/ModuleNotFoundError
+# guard.  Kept so container startup behaves identically to the development
+# environment if a host injects a .env; costs well under 1 MB.
+python-dotenv>=1.0
