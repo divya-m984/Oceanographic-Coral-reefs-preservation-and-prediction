@@ -23,7 +23,10 @@
 !src/
 !params.yaml
 !pyproject.toml
-!requirements.txt
+# Only the Streamlit runtime manifest is admitted — the full development
+# requirements.txt never enters this context, so the image cannot accidentally
+# install MLflow/DVC/Evidently or any model-execution library.
+!requirements-dashboard.txt
 !.streamlit/
 
 # ── Read-only synthetic demonstration assets (restored by `dvc pull` in CI) ──

@@ -34,10 +34,18 @@
 !src/
 !params.yaml
 !pyproject.toml
-!requirements.txt
 !docker/
 !.streamlit/
 !.env.example
+
+# ── Dedicated runtime dependency manifests ───────────────────────────────────
+# The serving images install ONLY these, never the full requirements.txt.  That
+# file is the development/MLOps environment (MLflow, DVC, Evidently, shap,
+# pytest, ruff) and is used by CI and the Makefile on the host, not in an image
+# — so it is deliberately NOT re-included and cannot reach any build context.
+# Dockerfile.mlflow pins `mlflow>=3.14,<4` inline and copies no manifest at all.
+!requirements-api.txt
+!requirements-dashboard.txt
 
 # ── API image: the checksum-verified champion bundle ─────────────────────────
 !deploy/bundles/

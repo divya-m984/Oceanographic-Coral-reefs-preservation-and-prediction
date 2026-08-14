@@ -1,0 +1,72 @@
+# requirements-dashboard.txt — production runtime for the Streamlit dashboard.
+#
+# SCOPE
+# -----
+# This file lists ONLY what src/dashboard/* needs to render the nine pages.  It
+# is installed by Dockerfile.dashboard and by nothing else.
+#
+#   requirements.txt            full MLOps/development environment.
+#   requirements-api.txt        public inference runtime.
+#   requirements-dashboard.txt  this file — Streamlit runtime.
+#
+# The dashboard loads NO model.  Every prediction is an HTTP call to the API
+# over CORALSENSE_API_URL (src/dashboard/api_client.py), so no model-execution
+# or deserialisation library belongs here.
+#
+# DELIBERATELY ABSENT
+# -------------------
+#   scikit-learn, joblib, xgboost   nothing under src/dashboard/ imports them;
+#                                   predictions come from the API over HTTP
+#   mlflow                          page 7 describes the MLOps stack in static
+#                                   text; it opens no tracking store
+#   dvc, dvc-s3                     page 7 mentions dvc.yaml as a string only;
+#                                   no DVC command runs at container runtime
+#   evidently                       page 8 reads the pre-computed
+#                                   reports/drift_summary.json, it does not
+#                                   recompute drift
+#   fastapi                         the dashboard is an HTTP client, not a server
+#                                   (uvicorn is NOT declared here either, but it
+#                                   still lands in the image: streamlit 1.60
+#                                   declares uvicorn<1,>=0.30 as a hard
+#                                   dependency for its own server, ~1 MB)
+#   shap, pandera, scipy            training/validation-time only
+#   folium, streamlit-folium        listed in requirements.txt but imported
+#                                   nowhere in the repository — the Reef Map
+#                                   page uses plotly.express.scatter_map
+#   pytest, ruff                    development tooling
+#
+# Python 3.12 (see Dockerfile.dashboard).
+
+# ── UI framework ─────────────────────────────────────────────────────────────
+# src/dashboard/app.py, components.py, data_loader.py and all nine pages.
+streamlit>=1.40
+
+# ── Charts ───────────────────────────────────────────────────────────────────
+# plotly.express is imported by pages 2, 3, 4, 6 and 8.
+#
+# The <6 cap is inherited verbatim from requirements.txt.  Nothing in this image
+# needs it (the cap exists because evidently 0.7 declares plotly<6, and evidently
+# is not installed here), but plotly 6 is a major version and this task does not
+# upgrade major versions.  The >=5.24 floor IS required by us: px.scatter_map,
+# used by the Reef Map page, was introduced in plotly 5.24.0.
+plotly>=5.24,<6
+
+# ── Data handling ────────────────────────────────────────────────────────────
+# src/dashboard/data_loader.py reads data/raw/observations.csv; pages filter and
+# aggregate the resulting DataFrame.  (numpy and pyarrow arrive transitively as
+# hard pandas/streamlit dependencies; no dashboard module imports them directly.)
+pandas>=2.0
+
+# ── API communication ────────────────────────────────────────────────────────
+# src/dashboard/api_client.py imports requests.  requests is currently satisfied
+# only transitively through the full requirements.txt tree, so it must be named
+# explicitly here.
+requests>=2.32
+
+# ── Configuration ────────────────────────────────────────────────────────────
+# src/dashboard/pages/8_Drift_Monitoring.py imports src.config.get_config, which
+# calls yaml.safe_load(params.yaml).
+pyyaml>=6.0
+# src/config._load_dotenv() imports dotenv inside a try/ModuleNotFoundError
+# guard.  Kept for parity with the development environment; well under 1 MB.
+python-dotenv>=1.0

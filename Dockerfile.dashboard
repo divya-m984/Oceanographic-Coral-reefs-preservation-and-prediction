@@ -35,15 +35,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /build
 
 # Dependency notes:
-#   - The dashboard does not import evidently; page 8 reads reports/drift_summary.json.
-#     Dropping it keeps the image smaller; the plotly pin is unchanged either way.
+#   - requirements-dashboard.txt is the STREAMLIT RUNTIME, not the full
+#     development environment.  The dashboard loads no model and runs no MLOps
+#     tool, so scikit-learn, xgboost, joblib, mlflow, dvc and evidently are all
+#     absent.  Page 8 reads the pre-computed reports/drift_summary.json; every
+#     prediction is an HTTP call to the API over CORALSENSE_API_URL.  See the
+#     header of requirements-dashboard.txt for the per-package justification.
 #   - plotly stays on the requirements.txt range (>=5.24,<6).  px.scatter_map, used
-#     by the Reef Map page, was introduced in plotly 5.24.0 — not plotly 6 — so the
-#     evidently-compatible 5.x range fully supports this dashboard.
-COPY requirements.txt .
+#     by the Reef Map page, was introduced in plotly 5.24.0, so the 5.x range fully
+#     supports this dashboard and no major-version upgrade is taken here.
+COPY requirements-dashboard.txt .
 RUN pip install --upgrade pip \
-    && grep -v "^evidently" requirements.txt > /tmp/reqs_dash.txt \
-    && pip install -r /tmp/reqs_dash.txt
+    && pip install -r requirements-dashboard.txt
 
 
 # ---------------------------------------------------------------------------

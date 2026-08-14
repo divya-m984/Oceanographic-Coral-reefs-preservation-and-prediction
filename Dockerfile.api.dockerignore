@@ -23,8 +23,10 @@
 !params.yaml
 # Package metadata for `pip install --no-deps -e .`
 !pyproject.toml
-# Dependency pins for the build stage
-!requirements.txt
+# Dependency pins for the build stage.  Only the inference runtime manifest is
+# admitted — the full development requirements.txt never enters this context, so
+# the image cannot accidentally install MLflow/DVC/Evidently/Streamlit.
+!requirements-api.txt
 # Container entrypoint helpers (init_mlflow.sh, init_drift.sh)
 !docker/
 # Checksum-verified champion bundle — the only model artifact in the image

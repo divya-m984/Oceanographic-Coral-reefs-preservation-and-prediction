@@ -484,6 +484,23 @@ Optionally copy the environment template:
 cp .env.example .env
 ```
 
+### Dependency manifests
+
+The repository keeps three manifests. Development and serving are deliberately
+separate: the full MLOps toolchain is never installed into a serving image.
+
+| File | Purpose | Used by |
+|---|---|---|
+| `requirements.txt` | **Full MLOps/development environment** — training, MLflow, DVC, Evidently, shap, pandera, the dashboard, pytest and ruff. Unchanged; still the environment for every pipeline, notebook and CI job. | local venv, `make install`, GitHub Actions |
+| `requirements-api.txt` | **Public inference runtime** — FastAPI, Uvicorn, Pydantic, pandas, NumPy, joblib, scikit-learn, XGBoost (CPU build), PyYAML, python-dotenv. | `Dockerfile.api` |
+| `requirements-dashboard.txt` | **Streamlit runtime** — Streamlit, Plotly, pandas, requests, PyYAML, python-dotenv. | `Dockerfile.dashboard` |
+
+Each entry in the two serving manifests is justified by an actual import or by
+an unpickling requirement of the exported champion bundle; version constraints
+are copied verbatim from `requirements.txt` so serving and development can never
+resolve to different major versions. `tests/test_runtime_requirements.py`
+enforces the separation structurally.
+
 ### DVC remote access
 
 Versioned pipeline artifacts are stored in the DagsHub-backed DVC remote named `dagshub`. The tracked `.dvc/config` contains only non-secret remote configuration; authentication credentials must remain local in `.dvc/config.local`, which is Git-ignored.
@@ -600,10 +617,35 @@ Public serving needs neither MLflow nor DVC at runtime:
 | Credentials | Runtime containers hold **no** DagsHub or DVC credentials. `.dvc/`, `.dvc/config.local`, and `.env` are excluded from every build context by an allow-list `.dockerignore`. |
 | Listening port | Both images bind `0.0.0.0` on `${PORT}`, falling back to `8000` (API) and `8501` (dashboard). Hosting providers that inject `PORT` are supported without configuration. |
 | MLflow | Not required for public serving. It remains a local/CI experiment-tracking tool. |
+| Runtime dependencies | Each serving image installs only its own manifest (`requirements-api.txt` / `requirements-dashboard.txt`). The full `requirements.txt` never enters a serving build context. |
 
 Planned, **not yet built**: a GitHub Actions release job publishing these images
 to GHCR, with Render running the prebuilt images. Render never receives
 DagsHub/DVC credentials. Nothing in this project is publicly deployed today.
+
+#### Runtime dependency separation
+
+Serving images intentionally exclude the MLOps toolchain. Nothing removed is
+reachable from a prediction request or a dashboard page render:
+
+| Excluded from serving images | Why it is not needed at runtime |
+|---|---|
+| MLflow | The API runs in bundle mode and queries no registry; no bundle artefact unpickles an MLflow class. The dashboard opens no tracking store. |
+| DVC / `dvc-s3` | Artifacts are restored by `dvc pull` **in CI, before `docker build`** — never at container start. No container runs a DVC command or holds a DagsHub credential. |
+| Evidently | Drift is computed by a separate offline job; the dashboard's Drift page reads the pre-computed `reports/drift_summary.json`. |
+| shap | Explainability is a training/analysis concern. Dropping it also removes numba and llvmlite. |
+| pandera | Schema validation runs in the DVC pipeline; the API validates requests with Pydantic. |
+| pytest, ruff, notebook tooling | Development only. |
+| scikit-learn, XGBoost, joblib, SciPy *(dashboard only)* | The dashboard loads no model — every prediction is an HTTP call to the API over `CORALSENSE_API_URL`. |
+| Streamlit, Plotly *(API only)* | The API renders no UI. |
+
+The API keeps the full deserialisation stack it genuinely needs: the health
+champion is a scikit-learn `LogisticRegression` and the restoration champion is
+an XGBoost model, so joblib, NumPy, scikit-learn and XGBoost must all remain.
+XGBoost is installed from the upstream CPU-only `xgboost-cpu` distribution: it
+provides the same `xgboost` module at the same version but omits the
+`nvidia-nccl-cu12` dependency (~400 MB of CUDA libraries) that the default wheel
+pulls in purely for multi-GPU training. Predictions are bit-identical.
 
 #### Build contexts
 
@@ -764,7 +806,9 @@ Oceanographic-Coral-reefs-preservation-and-prediction/
 ├── Makefile                     # Build, test, demo, and service targets
 ├── CHANGELOG.md                 # Milestone history
 ├── pyproject.toml               # Build config, pytest, ruff settings
-├── requirements.txt             # Full dependency list
+├── requirements.txt             # Full MLOps/development dependency list
+├── requirements-api.txt         # Public inference runtime (Dockerfile.api)
+├── requirements-dashboard.txt   # Streamlit runtime (Dockerfile.dashboard)
 ├── params.yaml                  # Single source of truth for all parameters
 ├── dvc.yaml                     # Seven-stage pipeline DAG
 ├── docker-compose.yml           # Four-service container orchestration

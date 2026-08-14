@@ -865,7 +865,7 @@ class TestServingBuildContexts:
             "src/",
             "params.yaml",
             "pyproject.toml",
-            "requirements.txt",
+            "requirements-api.txt",
             "docker/",
             "deploy/bundles/",
         }
@@ -897,17 +897,20 @@ class TestServingBuildContexts:
 
     def test_root_dockerignore_serves_mlflow_build(self, dockerignore_text):
         """Dockerfile.mlflow has no specific ignore file, so the root file must
-        still admit everything it copies — only docker/init_mlflow.sh and
-        requirements.txt.  The canonical DB is bind-mounted, never baked."""
+        still admit everything it copies — only docker/init_mlflow.sh.  It pins
+        mlflow inline and copies no requirements manifest.  The canonical DB is
+        bind-mounted, never baked."""
         mlflow_text = _DOCKERFILE_MLFLOW.read_text()
         copied = [ln for ln in _instructions(mlflow_text).splitlines() if ln.startswith("COPY")]
         assert copied, "Dockerfile.mlflow should copy at least the init script"
         assert all("artifacts" not in ln and "mlruns" not in ln for ln in copied), (
             f"mlflow image must not bake MLflow state, got: {copied}"
         )
+        assert all("requirements" not in ln for ln in copied), (
+            f"Dockerfile.mlflow pins mlflow inline; it must copy no manifest, got: {copied}"
+        )
         rules = {ln.strip() for ln in _instructions(dockerignore_text).splitlines()}
         assert "!docker/" in rules
-        assert "!requirements.txt" in rules
 
     def test_root_dockerignore_excludes_mlflow_bulk(self, dockerignore_text):
         """~367 MB of mlruns/ must not be shipped to any build context."""
@@ -928,7 +931,8 @@ class TestServingBuildContexts:
             "!src/",
             "!params.yaml",
             "!pyproject.toml",
-            "!requirements.txt",
+            "!requirements-api.txt",
+            "!requirements-dashboard.txt",
             "!docker/",
             "!.streamlit/",
             "!deploy/bundles/",
