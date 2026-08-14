@@ -93,9 +93,10 @@ Coral reef ecosystems face accelerating degradation from ocean warming, acidific
 | Controlled retraining | Implemented | Challenger training, comparison, gated promotion, rollback |
 | Docker deployment | Implemented | 4-service local Compose stack |
 | CI/CD pipeline | Implemented | 5 GitHub Actions jobs on every push/PR |
+| Image release workflow | Implemented, not yet run | Manual GHCR publication of the two serving images; no image published yet |
 | Real sonar integration | Not yet implemented | Requires field equipment and calibration |
 | Marine-scientist validation | Not yet performed | Synthetic data only; no ecological conclusions |
-| Cloud deployment | Not yet implemented | Local prototype only |
+| Cloud deployment | Not yet implemented | Render is the next step; nothing is publicly deployed |
 
 ---
 
@@ -619,9 +620,10 @@ Public serving needs neither MLflow nor DVC at runtime:
 | MLflow | Not required for public serving. It remains a local/CI experiment-tracking tool. |
 | Runtime dependencies | Each serving image installs only its own manifest (`requirements-api.txt` / `requirements-dashboard.txt`). The full `requirements.txt` never enters a serving build context. |
 
-Planned, **not yet built**: a GitHub Actions release job publishing these images
-to GHCR, with Render running the prebuilt images. Render never receives
-DagsHub/DVC credentials. Nothing in this project is publicly deployed today.
+The GitHub Actions release workflow that produces these images is described
+under [Release workflow](#release-workflow). Render deployment is the **next**
+step and is not configured yet; nothing in this project is publicly deployed
+today, and no image has been published to GHCR yet.
 
 #### Runtime dependency separation
 
@@ -736,6 +738,52 @@ flowchart LR
 
 CI uses Python 3.12 and `MLFLOW_TRACKING_URI=sqlite:///ci_mlruns.db` to isolate all runs from the canonical database.
 
+### Release workflow
+
+The two public serving images are produced by a **separate** workflow,
+`.github/workflows/release-images.yml`. It is `workflow_dispatch` only —
+triggered by hand after the CI workflow above has gone green — because every run
+restores DVC artifacts and pushes two multi-hundred-megabyte images. A release
+from any ref other than `refs/heads/main` fails explicitly.
+
+```mermaid
+flowchart TD
+    G["Guard<br/>main-only · DAGSHUB_TOKEN present · CI green for this SHA"]
+    P["Prepare<br/>dvc pull → preflight → export champions → verify bundle"]
+    B["Build + push candidates<br/>Buildx · linux/amd64 · immutable sha-&lt;full-sha&gt; tags"]
+    S["Smoke-test published digests<br/>API /ready + /predict · dashboard /_stcore/health"]
+    M["Advance moving :main tag<br/>retag the tested digest, no rebuild"]
+
+    G --> P --> B --> S --> M
+```
+
+| Aspect | Behaviour |
+|---|---|
+| Images | `ghcr.io/divya-m984/oceanographic-api` and `ghcr.io/divya-m984/oceanographic-dashboard`. The MLflow image and the drift container are **not** published. |
+| Artifact provenance | DVC-tracked models and data are restored with `dvc pull` **in CI, before `docker build`**; the champion bundle is then exported and verified. Nothing is restored at container start. |
+| Registry safety | Read / prepare / build / publish only. No `dvc push`, no `dvc repro`, no training, registration, promotion or rollback; no champion alias is ever changed. |
+| Tags | Each build gets an immutable `sha-<full-git-sha>` tag. The moving `main` tag is advanced **only after** both candidates pass their smoke tests, and re-points at the exact tested digest without rebuilding. `latest` is deliberately not published. |
+| Digests | The registry digest of each image is captured and printed in the workflow summary. Deploy by digest, not by tag. |
+| Runtime credentials | The published images contain **no** DVC or DagsHub credentials, and require **no** MLflow at runtime. |
+
+**Secrets.** The workflow needs exactly one manually configured repository
+Actions secret:
+
+| Secret | Purpose |
+|---|---|
+| `DAGSHUB_TOKEN` | Restores DVC-tracked artifacts from DagsHub Storage. The same token is used as both the S3-compatible access key ID and secret access key. |
+| `GITHUB_TOKEN` | Built in, not configured by you. Publishes to GHCR with `packages: write`. No personal access token is required. |
+
+Add `DAGSHUB_TOKEN` under **Settings → Secrets and variables → Actions**. Never
+paste it into a YAML file, `.env.example`, a commit, a Docker build argument or
+an image label. During a release it is written only to `.dvc/config.local` on
+the runner and removed by a shell `trap` before the step exits, including on
+failure; the tracked `.dvc/config` is never modified.
+
+After the **first** successful release, the two GHCR packages need their
+visibility/access reviewed once by hand in the GitHub UI. The workflow holds no
+package administration permission and cannot change it.
+
 ---
 
 ## Monitoring and Drift
@@ -815,7 +863,9 @@ Oceanographic-Coral-reefs-preservation-and-prediction/
 ├── Dockerfile.api               # FastAPI multi-stage image
 ├── Dockerfile.dashboard         # Streamlit multi-stage image
 ├── Dockerfile.mlflow            # MLflow tracking server image
-├── .github/workflows/ci.yml    # GitHub Actions CI pipeline
+├── .github/workflows/
+│   ├── ci.yml                   # GitHub Actions CI pipeline
+│   └── release-images.yml       # Manual GHCR serving-image release
 ├── .env.example                 # Environment variable template
 ├── src/
 │   ├── config.py                # Central config (paths, params, logging)

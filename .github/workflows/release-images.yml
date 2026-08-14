@@ -1,0 +1,566 @@
+# .github/workflows/release-images.yml — publish the two public serving images.
+#
+# Scope
+# -----
+# This workflow builds and publishes ONLY the two serving images:
+#
+#   ghcr.io/divya-m984/oceanographic-api
+#   ghcr.io/divya-m984/oceanographic-dashboard
+#
+# It does NOT build or publish the MLflow image or the drift container: neither
+# is part of the public deployment.  It does not deploy anywhere — Render (or
+# any other host) is configured separately, from the digests reported here.
+#
+# Release path
+# ------------
+#   main @ <sha>
+#     -> guard      : refuse non-main refs; require DAGSHUB_TOKEN; require a
+#                     successful CI run for this exact commit
+#     -> release    : ephemeral DVC credentials -> dvc pull -> preflight ->
+#                     export champions -> verify bundle -> buildx build+push
+#                     immutable sha-<full-sha> tags -> smoke-test the PUBLISHED
+#                     candidates
+#     -> promote    : only now advance the moving `:main` tag to the exact
+#                     digests that passed the smoke tests (no rebuild)
+#
+# Why manual
+# ----------
+# Every run restores DVC artifacts and pushes two multi-hundred-megabyte images.
+# Publishing on every push to main would be slow and wasteful, so releases are
+# deliberately `workflow_dispatch` only, run after CI has gone green.
+#
+# Secret contract
+# ---------------
+# DAGSHUB_TOKEN   repository Actions secret; the ONLY externally configured
+#                 secret.  DagsHub Storage accepts the token as BOTH the
+#                 S3-compatible access key id and secret access key.  It is
+#                 written only to .dvc/config.local on the runner, removed
+#                 before the step exits (including on failure), and never
+#                 reaches a build argument, image label, image environment
+#                 variable, workflow artifact or log line.
+# GITHUB_TOKEN    built-in; publishes to GHCR.  No PAT is required.
+#
+# What this workflow never does
+# -----------------------------
+# dvc push, dvc repro, training, registration, promotion, rollback, candidate
+# registration.  It is read / prepare / build / publish only, and never mutates
+# the canonical MLflow registry or any champion alias.
+#
+# SYNTHETIC-DATA DISCLAIMER
+# The published images serve models trained on synthetic data only.
+
+name: Release Serving Images
+
+on:
+  workflow_dispatch:
+
+# Least privilege at the top level; jobs widen only what they need.
+permissions:
+  contents: read
+
+# One release at a time.  cancel-in-progress is deliberately false: a release
+# that is already pushing images or advancing tags must be allowed to finish
+# rather than be killed half-way by a second manual trigger.
+concurrency:
+  group: release-images
+  cancel-in-progress: false
+
+env:
+  API_IMAGE: ghcr.io/divya-m984/oceanographic-api
+  DASHBOARD_IMAGE: ghcr.io/divya-m984/oceanographic-dashboard
+  PYTHON_VERSION: "3.12"
+
+jobs:
+
+  # ── Job 1: release checkpoint guard ──────────────────────────────────────
+  # Cheap, no secrets beyond presence checks, no build.  Everything expensive
+  # is gated behind this.
+  guard:
+    name: Verify Release Checkpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # Only addition over the top-level default: reading CI run conclusions
+      # through the Actions API for the same-SHA gate below.
+      actions: read
+
+    steps:
+      - name: Refuse to release from anything except main
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Serving images may only be released from refs/heads/main (got ${GITHUB_REF})."
+            echo "A manually selected branch or tag must never publish images to the public GHCR paths."
+            exit 1
+          fi
+          echo "Releasing from ${GITHUB_REF} at ${GITHUB_SHA}."
+
+      - name: Require the DAGSHUB_TOKEN release secret
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          if [ -z "${DAGSHUB_TOKEN}" ]; then
+            echo "::error::Missing repository Actions secret: DAGSHUB_TOKEN"
+            echo "Add it under Settings -> Secrets and variables -> Actions."
+            echo "DagsHub Storage uses the same token as both S3 access key id and secret access key."
+            exit 1
+          fi
+          # Presence only.  The value is never echoed, written to a file here,
+          # or exported beyond this step.
+          echo "DAGSHUB_TOKEN is configured."
+
+      - name: Require a successful CI run for this exact commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          conclusion=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&status=completed&per_page=1" \
+            --jq '.workflow_runs[0].conclusion // "none"')
+          if [ "${conclusion}" != "success" ]; then
+            echo "::error::CI has not completed successfully for ${GITHUB_SHA} (conclusion: ${conclusion})."
+            echo "Release images are only ever built from a source checkpoint CI has already validated."
+            exit 1
+          fi
+          echo "CI concluded 'success' for ${GITHUB_SHA}."
+
+  # ── Job 2: prepare, build, publish candidates, smoke-test ────────────────
+  # Preparation and build share ONE job because `dvc pull` and
+  # scripts/export_champions.py mutate the checked-out workspace, and the image
+  # builds must see those mutations (see the build-context note below).
+  release:
+    name: Build and Publish Candidates
+    runs-on: ubuntu-latest
+    needs: guard
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      api-tag: ${{ steps.meta-api.outputs.version }}
+      api-digest: ${{ steps.build-api.outputs.digest }}
+      dashboard-tag: ${{ steps.meta-dashboard.outputs.version }}
+      dashboard-digest: ${{ steps.build-dashboard.outputs.digest }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # The FULL development environment is correct here: DVC restore, MLflow
+      # champion resolution and Pandera/Evidently-backed preflight checks are
+      # all build-time concerns.  None of it reaches the serving images — the
+      # Dockerfiles install requirements-api.txt / requirements-dashboard.txt
+      # and the per-Dockerfile .dockerignore files keep requirements.txt out of
+      # both build contexts entirely.
+      - name: Install release preparation dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      # ── DVC restore with ephemeral credentials ─────────────────────────────
+      # The token is configured into .dvc/config.local (Git-ignored, never
+      # committed) and removed by an EXIT trap so it disappears even when
+      # `dvc pull` fails.  The tracked .dvc/config is never modified.
+      - name: Restore DVC-tracked artifacts from DagsHub
+        env:
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cleanup() { rm -f .dvc/config.local; }
+          trap cleanup EXIT
+
+          dvc remote modify --local dagshub access_key_id "${DAGSHUB_TOKEN}"
+          dvc remote modify --local dagshub secret_access_key "${DAGSHUB_TOKEN}"
+
+          dvc pull -r dagshub
+
+      - name: Assert ephemeral credentials are gone and tracked config is untouched
+        run: |
+          set -euo pipefail
+          if [ -f .dvc/config.local ]; then
+            echo "::error::.dvc/config.local survived the DVC restore step."
+            exit 1
+          fi
+          if ! git diff --quiet -- .dvc/config; then
+            echo "::error::The tracked .dvc/config was modified during the release."
+            exit 1
+          fi
+          echo "No credential file remains; tracked .dvc/config is unchanged."
+
+      # ── Read-only source verification (reuses the project's own tooling) ──
+      # preflight.py owns the protected-artifact checksums, champion-alias and
+      # DVC-hygiene invariants; they are deliberately not duplicated here.
+      # Exit 1 means a blocking failure, which fails the release.  Warnings keep
+      # exactly the meaning preflight already defines (no local .venv, no
+      # .dvc/config.local, free ports, no running demo containers, and — at this
+      # point in the run — no exported bundle yet).
+      - name: Read-only project preflight
+        run: python scripts/preflight.py
+
+      # ── Champion export must follow the DVC restore ──────────────────────
+      # export_champions.py copies models/best_model_*.joblib and
+      # data/processed/preprocessor_*.joblib, both DVC-tracked, so it cannot run
+      # before `dvc pull`.  It resolves champions read-only and registers,
+      # promotes and trains nothing.
+      - name: Export champion deployment bundles
+        run: python scripts/export_champions.py
+
+      - name: Verify deployment bundles
+        run: python scripts/verify_deployment_bundle.py
+
+      - name: Assert no credential material can enter a build context
+        run: |
+          set -euo pipefail
+          for f in .dvc/config.local .env .netrc; do
+            if [ -e "$f" ]; then
+              echo "::error::$f exists in the workspace at build time."
+              exit 1
+            fi
+          done
+          echo "Workspace carries no credential file."
+
+      # ── Build and publish ────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: API image metadata
+        id: meta-api
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.API_IMAGE }}
+          # Immutable, commit-derived tag only.  The moving `:main` tag is added
+          # by the promote job, and only after the smoke tests pass.  `latest`
+          # is deliberately not published: it carries no release semantics.
+          tags: |
+            type=sha,format=long,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=CoralSense Reef Inference API
+            org.opencontainers.image.description=FastAPI inference service serving checksum-verified champion bundles. Synthetic data only.
+
+      - name: Build and push API candidate
+        id: build-api
+        uses: docker/build-push-action@v7
+        with:
+          # PATH context, NOT the action's default Git context: `dvc pull` and
+          # export_champions.py created deploy/bundles/ and restored
+          # data/, models/ in the checked-out workspace.  None of that exists in
+          # Git, so a Git context would build an image without a bundle.
+          context: .
+          file: ./Dockerfile.api
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          # Distinct scope per image so the two builds do not evict each other.
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Dashboard image metadata
+        id: meta-dashboard
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.DASHBOARD_IMAGE }}
+          tags: |
+            type=sha,format=long,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=CoralSense Reef Dashboard
+            org.opencontainers.image.description=Streamlit dashboard; reaches the inference API over CORALSENSE_API_URL. Synthetic data only.
+
+      - name: Build and push dashboard candidate
+        id: build-dashboard
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile.dashboard
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta-dashboard.outputs.tags }}
+          labels: ${{ steps.meta-dashboard.outputs.labels }}
+          cache-from: type=gha,scope=dashboard
+          cache-to: type=gha,scope=dashboard,mode=max
+          provenance: mode=max
+          sbom: true
+
+      # ── Smoke-test the PUBLISHED candidates, by digest ───────────────────
+      # Everything below runs the exact bytes that are now in GHCR, pulled back
+      # by immutable digest — not a local build artifact.
+      - name: Smoke-test published API candidate
+        env:
+          API_REF: ${{ env.API_IMAGE }}@${{ steps.build-api.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker network create coralsense-release
+          docker run -d --name coralsense-release-api \
+            --network coralsense-release -p 18000:8000 "${API_REF}"
+
+          ready=""
+          for _ in $(seq 1 36); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18000/ready || true)
+            if [ "${code}" = "200" ]; then ready=yes; break; fi
+            sleep 5
+          done
+          if [ -z "${ready}" ]; then
+            echo "::error::API candidate never became ready (GET /ready)."
+            docker logs coralsense-release-api || true
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          import urllib.request
+
+          BASE = "http://127.0.0.1:18000"
+
+          OBSERVATION = {
+              "region": "Gulf of Mannar",
+              "depth_m": 5.0,
+              "water_temperature_c": 27.5,
+              "ph": 8.1,
+              "salinity_ppt": 35.0,
+              "dissolved_oxygen_mg_l": 7.0,
+              "turbidity_ntu": 2.0,
+              "light_intensity": 800.0,
+              "current_speed_m_s": 0.2,
+              "sonar_backscatter": -15.0,
+              "rugosity_index": 3.5,
+              "hard_substrate_percentage": 60.0,
+              "acoustic_complexity_index": 0.7,
+              "coral_cover_percentage": 45.0,
+              "bleaching_percentage": 5.0,
+              "disease_percentage": 2.0,
+          }
+
+
+          def get(path):
+              with urllib.request.urlopen(BASE + path, timeout=20) as r:
+                  assert r.status == 200, f"GET {path} -> {r.status}"
+                  return json.load(r)
+
+
+          get("/health")
+          print("GET /health -> 200")
+          get("/ready")
+          print("GET /ready  -> 200")
+
+          info = get("/model-info")
+          for task, expected in (
+              ("health", "coralsense_reef_health"),
+              ("restoration", "coralsense_restoration_suitability"),
+          ):
+              entry = info[task]
+              assert entry.get("available") is True, f"{task} champion unavailable"
+              assert entry["registered_model_name"] == expected, entry["registered_model_name"]
+              assert entry["version"] == "1", f"{task} champion is v{entry['version']}, expected v1"
+              assert entry["alias"] == "champion", entry["alias"]
+              print(f"GET /model-info -> {task}: {expected} v1 ({entry['algo_name']})")
+
+          req = urllib.request.Request(
+              BASE + "/predict/both",
+              data=json.dumps(OBSERVATION).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=30) as r:
+              assert r.status == 200, f"POST /predict/both -> {r.status}"
+              body = json.load(r)
+          for task in ("health", "restoration"):
+              pred = body[task]
+              assert pred["predicted_class"], f"{task}: empty prediction"
+              print(
+                  f"POST /predict/both -> {task}: {pred['predicted_class']} "
+                  f"({pred['confidence']:.6f})"
+              )
+          PY
+
+          docker logs coralsense-release-api > api-candidate.log 2>&1
+          if grep -Eiq 'ImportError|ModuleNotFoundError|UnpicklingError|model unavailable|checksum mismatch|Traceback' api-candidate.log; then
+            echo "::error::API candidate logged an import, unpickle or model-loading failure."
+            cat api-candidate.log
+            exit 1
+          fi
+          echo "API candidate logs are clean."
+
+      - name: Smoke-test published dashboard candidate
+        env:
+          DASHBOARD_REF: ${{ env.DASHBOARD_IMAGE }}@${{ steps.build-dashboard.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Same isolated network as the API container, so the dashboard reaches
+          # it exactly the way it will in production: over CORALSENSE_API_URL.
+          docker run -d --name coralsense-release-dashboard \
+            --network coralsense-release -p 18501:8501 \
+            -e CORALSENSE_API_URL=http://coralsense-release-api:8000 \
+            "${DASHBOARD_REF}"
+
+          healthy=""
+          for _ in $(seq 1 36); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18501/_stcore/health || true)
+            if [ "${code}" = "200" ]; then healthy=yes; break; fi
+            sleep 5
+          done
+          if [ -z "${healthy}" ]; then
+            echo "::error::Dashboard candidate never became healthy (GET /_stcore/health)."
+            docker logs coralsense-release-dashboard || true
+            exit 1
+          fi
+          echo "GET /_stcore/health -> 200"
+
+          # Headless in-container checks: the baked-in demonstration assets
+          # load, the API is reachable over CORALSENSE_API_URL, and every page
+          # script renders without raising.  No browser is involved.
+          docker exec -i coralsense-release-dashboard python - <<'PY'
+          import pathlib
+
+          from src.dashboard.api_client import APIClient
+          from src.dashboard.data_loader import load_observations
+          from streamlit.testing.v1 import AppTest
+
+          df = load_observations()
+          assert not df.empty, "baked-in observations.csv is empty"
+          print(f"load_observations() -> {len(df)} rows x {len(df.columns)} columns")
+
+          client = APIClient()
+          assert client.health().get("status"), "API health response had no status"
+          info = client.model_info()
+          for task in ("health", "restoration"):
+              assert info[task]["version"] == "1", info[task]["version"]
+          print("Dashboard reached the API over CORALSENSE_API_URL; both champions are v1.")
+
+          root = pathlib.Path("src/dashboard")
+          scripts = [root / "app.py"] + sorted((root / "pages").glob("*.py"))
+          for script in scripts:
+              at = AppTest.from_file(str(script), default_timeout=90).run()
+              assert len(at.exception) == 0, f"{script.name}: {at.exception}"
+              print(f"rendered {script.name}")
+          print(f"All {len(scripts)} page scripts rendered with no exception.")
+          PY
+
+          docker logs coralsense-release-dashboard > dashboard-candidate.log 2>&1
+          if grep -Eiq 'ImportError|ModuleNotFoundError|Traceback' dashboard-candidate.log; then
+            echo "::error::Dashboard candidate logged an import failure."
+            cat dashboard-candidate.log
+            exit 1
+          fi
+          echo "Dashboard candidate logs are clean."
+
+      - name: Tear down smoke-test containers
+        if: always()
+        run: |
+          docker rm -f coralsense-release-api coralsense-release-dashboard 2>/dev/null || true
+          docker network rm coralsense-release 2>/dev/null || true
+
+      - name: Candidate summary
+        if: always()
+        run: |
+          {
+            echo "### Serving image candidates"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Release Git SHA | \`${GITHUB_SHA}\` |"
+            echo "| API image | \`${API_IMAGE}\` |"
+            echo "| API SHA tag | \`${{ steps.meta-api.outputs.version }}\` |"
+            echo "| API digest | \`${{ steps.build-api.outputs.digest }}\` |"
+            echo "| Dashboard image | \`${DASHBOARD_IMAGE}\` |"
+            echo "| Dashboard SHA tag | \`${{ steps.meta-dashboard.outputs.version }}\` |"
+            echo "| Dashboard digest | \`${{ steps.build-dashboard.outputs.digest }}\` |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  # ── Job 3: advance the moving deployment tag ─────────────────────────────
+  # Runs ONLY if the release job (build + push + both smoke tests) succeeded,
+  # so a failed candidate can never move `:main`.  The failed SHA-tagged
+  # candidate stays in GHCR for auditability; nothing is deleted here.
+  promote:
+    name: Advance Moving main Tag
+    runs-on: ubuntu-latest
+    needs: [guard, release]
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `imagetools create` re-points a tag at an existing manifest.  Nothing is
+      # rebuilt, so `:main` resolves to byte-identical content — the exact digest
+      # the smoke tests exercised.
+      - name: Point :main at the tested API digest
+        env:
+          DIGEST: ${{ needs.release.outputs.api-digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${API_IMAGE}:main" "${API_IMAGE}@${DIGEST}"
+          resolved=$(docker buildx imagetools inspect "${API_IMAGE}:main" --format '{{.Manifest.Digest}}')
+          if [ "${resolved}" != "${DIGEST}" ]; then
+            echo "::error::${API_IMAGE}:main resolves to ${resolved}, not the tested digest ${DIGEST}."
+            exit 1
+          fi
+          echo "${API_IMAGE}:main -> ${resolved}"
+
+      - name: Point :main at the tested dashboard digest
+        env:
+          DIGEST: ${{ needs.release.outputs.dashboard-digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${DASHBOARD_IMAGE}:main" "${DASHBOARD_IMAGE}@${DIGEST}"
+          resolved=$(docker buildx imagetools inspect "${DASHBOARD_IMAGE}:main" --format '{{.Manifest.Digest}}')
+          if [ "${resolved}" != "${DIGEST}" ]; then
+            echo "::error::${DASHBOARD_IMAGE}:main resolves to ${resolved}, not the tested digest ${DIGEST}."
+            exit 1
+          fi
+          echo "${DASHBOARD_IMAGE}:main -> ${resolved}"
+
+      - name: Release summary
+        run: |
+          {
+            echo "### Release published"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Release Git SHA | \`${GITHUB_SHA}\` |"
+            echo "| API image | \`${API_IMAGE}\` |"
+            echo "| API SHA tag | \`${{ needs.release.outputs.api-tag }}\` |"
+            echo "| API digest | \`${{ needs.release.outputs.api-digest }}\` |"
+            echo "| Dashboard image | \`${DASHBOARD_IMAGE}\` |"
+            echo "| Dashboard SHA tag | \`${{ needs.release.outputs.dashboard-tag }}\` |"
+            echo "| Dashboard digest | \`${{ needs.release.outputs.dashboard-digest }}\` |"
+            echo "| Moving \`:main\` tags advanced | yes |"
+            echo ""
+            echo "Deploy by digest, not by tag:"
+            echo ""
+            echo "\`\`\`"
+            echo "${API_IMAGE}@${{ needs.release.outputs.api-digest }}"
+            echo "${DASHBOARD_IMAGE}@${{ needs.release.outputs.dashboard-digest }}"
+            echo "\`\`\`"
+            echo ""
+            echo "> After the FIRST successful release, the two GHCR packages must have their"
+            echo "> visibility/access reviewed manually in the GitHub UI. This workflow"
+            echo "> deliberately holds no package admin permission and cannot change it."
+          } >> "${GITHUB_STEP_SUMMARY}"
