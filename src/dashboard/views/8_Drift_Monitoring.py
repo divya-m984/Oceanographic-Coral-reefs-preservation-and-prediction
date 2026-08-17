@@ -26,18 +26,16 @@ import json
 from typing import Any
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from src.config import get_config
+from src.dashboard import theme
 from src.dashboard.components import (
-    CORAL,
-    DARK_BLUE,
     DISCLAIMER_FULL,
-    TEAL,
     render_sidebar,
     set_page,
 )
+from src.dashboard.viz import mirrored_stream, mountain_chart
 
 set_page("Drift Monitoring")
 render_sidebar(show_region_filter=False)
@@ -53,10 +51,11 @@ _SUMMARY_PATH = get_config().drift_summary_path
 # Header
 # ---------------------------------------------------------------------------
 
-st.title("Drift Monitoring")
-st.caption(
+theme.page_header(
+    "Drift Monitoring",
     "Statistical drift detection between a reference window (training distribution) "
-    "and a synthetic production window. Based on Evidently AI."
+    "and a synthetic production window. Based on Evidently AI.",
+    eyebrow="Model health",
 )
 st.info(
     "**Synthetic data only.** All drift analysis is performed on computer-generated "
@@ -112,45 +111,64 @@ total_cols = feat.get("total_columns", 0)
 pred_h_drifted = pred_h.get("drifted", False)
 pred_r_drifted = pred_r.get("drifted", False)
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Drifted Features", f"{drifted_cols} / {total_cols}")
-col2.metric("Health Pred Drift", "Yes" if pred_h_drifted else "No")
-col3.metric("Restoration Pred Drift", "Yes" if pred_r_drifted else "No")
-col4.metric("Shift Scale", summary.get("shift_scale", "—"))
+theme.stat_row(
+    [
+        {
+            "label": "Drifted features",
+            "value": f"{drifted_cols} / {total_cols}",
+            "caption": "columns past the threshold",
+            "accent": theme.DANGER if drifted_cols else theme.SUCCESS,
+        },
+        {
+            "label": "Health pred drift",
+            "value": "Yes" if pred_h_drifted else "No",
+            "caption": "predicted-class distribution",
+            "accent": theme.DANGER if pred_h_drifted else theme.SUCCESS,
+        },
+        {
+            "label": "Restoration pred drift",
+            "value": "Yes" if pred_r_drifted else "No",
+            "caption": "predicted-class distribution",
+            "accent": theme.DANGER if pred_r_drifted else theme.SUCCESS,
+        },
+        {
+            "label": "Shift scale",
+            "value": str(summary.get("shift_scale", "—")),
+            "caption": "simulated degradation",
+            "accent": theme.AQUA,
+        },
+    ]
+)
 
 st.markdown(
-    f"<div style='font-size:0.8rem; color:#8892b0;'>"
-    f"Reference: {summary.get('reference_n', '—')} rows &nbsp;|&nbsp; "
-    f"Production: {summary.get('production_n', '—')} rows &nbsp;|&nbsp; "
+    f"<div style='font-size:0.78rem; color:{theme.TEXT_DIM}; margin-top:0.9rem'>"
+    f"Reference: {summary.get('reference_n', '—')} rows &nbsp;·&nbsp; "
+    f"Production: {summary.get('production_n', '—')} rows &nbsp;·&nbsp; "
     f"Generated: {summary.get('generated_at', '—')[:19].replace('T', ' ')} UTC"
     f"</div>",
     unsafe_allow_html=True,
 )
 
-st.divider()
+theme.spacer("1.4rem")
 
 # ---------------------------------------------------------------------------
 # Recommendation
 # ---------------------------------------------------------------------------
 
 recommendation = summary.get("recommendation", "")
-rec_color = TEAL
+rec_color = theme.SUCCESS
 rec_icon = "✓"
 if recommendation.startswith("RETRAIN"):
-    rec_color = "#e74c3c"
+    rec_color = theme.DANGER
     rec_icon = "⚠"
 elif recommendation.startswith("INVESTIGATE"):
-    rec_color = "#f39c12"
+    rec_color = theme.WARNING
     rec_icon = "●"
 
-st.markdown(
-    f"<div style='background:{DARK_BLUE}; border-radius:10px; "
-    f"padding:1rem 1.2rem; border-left:4px solid {rec_color};'>"
-    f"<div style='color:{rec_color}; font-weight:700; font-size:1rem; margin-bottom:4px;'>"
-    f"{rec_icon} Recommendation</div>"
-    f"<div style='color:#ccd6f6;'>{recommendation}</div>"
-    f"</div>",
-    unsafe_allow_html=True,
+theme.panel(
+    f"<span style='color:{theme.TEXT};font-size:0.95rem'>{recommendation}</span>",
+    label=f"{rec_icon} Recommendation",
+    accent=rec_color,
 )
 
 st.divider()
@@ -159,10 +177,11 @@ st.divider()
 # Feature Drift
 # ---------------------------------------------------------------------------
 
-st.header("Feature Drift")
-st.caption(
+theme.section(
+    "Feature Drift",
     f"Drift threshold: p < {summary.get('drift_threshold', 0.10)}. "
-    "Method: Kolmogorov-Smirnov (continuous features)."
+    "Method: Kolmogorov-Smirnov (continuous features).",
+    kicker="Input distribution",
 )
 
 per_col: dict[str, Any] = feat.get("per_column", {})
@@ -182,7 +201,9 @@ if per_col:
     st.dataframe(
         df_feat.style.apply(
             lambda row: [
-                f"color: {'#e74c3c' if v == 'Yes' else '#2ecc71'};" if col == "Drifted" else ""
+                f"color: {theme.DANGER if v == 'Yes' else theme.SUCCESS};"
+                if col == "Drifted"
+                else ""
                 for col, v in zip(row.index, row, strict=False)
             ],
             axis=1,
@@ -191,31 +212,30 @@ if per_col:
         hide_index=True,
     )
 
-    # p-value bar chart
-    fig_feat = px.bar(
-        df_feat,
-        x="p-value",
-        y="Feature",
-        color="Drifted",
-        color_discrete_map={"Yes": "#e74c3c", "No": "#2ecc71"},
-        orientation="h",
-        title="Feature Drift p-values (lower = more drift)",
+    # p-values as a mountain range: each summit is the feature's exact p-value,
+    # and the shoreline marks the drift threshold. A ridge that fails to reach
+    # the threshold line is a drifted feature.
+    threshold = float(summary.get("drift_threshold", 0.10))
+    fig_feat = mountain_chart(
+        list(df_feat["Feature"]),
+        [float(v) for v in df_feat["p-value"]],
+        value_name="p-value",
+        digits=5,
+        y_range=(0, 1),
+        title="Feature drift p-values (lower = more drift)",
+        height=460,
     )
-    threshold = summary.get("drift_threshold", 0.10)
-    fig_feat.add_vline(
-        x=threshold,
+    fig_feat.add_hline(
+        y=threshold,
         line_dash="dash",
-        line_color="#f39c12",
-        annotation_text=f"threshold={threshold}",
-        annotation_font_color="#f39c12",
+        line_color=theme.WARNING,
+        annotation_text=f"threshold = {threshold}",
+        annotation_font_color=theme.WARNING,
+        annotation_position="top left",
     )
     fig_feat.update_layout(
-        paper_bgcolor=DARK_BLUE,
-        plot_bgcolor="#0a1628",
-        font_color="#ccd6f6",
-        margin=dict(t=50, b=10),
-        xaxis=dict(gridcolor="#1a3a5c", range=[0, 1]),
-        yaxis=dict(gridcolor="#1a3a5c"),
+        margin=dict(t=70, b=120, l=64, r=26),
+        xaxis=dict(tickangle=-40, tickfont=dict(size=10)),
     )
     st.plotly_chart(fig_feat, use_container_width=True)
 else:
@@ -227,10 +247,11 @@ st.divider()
 # Prediction Distribution Drift
 # ---------------------------------------------------------------------------
 
-st.header("Prediction Distribution Drift")
-st.caption(
+theme.section(
+    "Prediction Distribution Drift",
     "Distribution of predicted classes in the reference vs production window. "
-    "No accuracy is shown — the production window is unlabeled."
+    "No accuracy is shown — the production window is unlabeled.",
+    kicker="Output distribution",
 )
 
 
@@ -241,55 +262,61 @@ def _render_pred_drift(task_drift: dict[str, Any], task_label: str, accent: str)
     ref_dist: dict[str, float] = task_drift.get("reference_distribution", {})
     cur_dist: dict[str, float] = task_drift.get("current_distribution", {})
 
-    status_color = "#e74c3c" if drifted else "#2ecc71"
+    status_color = theme.DANGER if drifted else theme.SUCCESS
     status_label = "DRIFTED" if drifted else "STABLE"
     st.markdown(
-        f"<div style='background:#0a1628; border-radius:8px; "
-        f"padding:0.6rem 1rem; border-left:3px solid {status_color}; margin-bottom:0.5rem;'>"
-        f"<span style='color:{status_color}; font-weight:700;'>{status_label}</span>"
-        f"<span style='color:#8892b0; font-size:0.85rem;'>"
-        f" &nbsp;|&nbsp; p={p_val:.4f} ({method})</span>"
+        f"<div class='cs-status' style='margin-bottom:0.6rem'>"
+        f"<span class='cs-status__dot' style='background:{status_color};"
+        f"box-shadow:0 0 0 3px {status_color}33'></span>"
+        f"<span class='cs-status__text' style='color:{status_color}'>{status_label}</span>"
+        f"<span class='cs-status__sub'>p={p_val:.4f} ({method})</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
 
     if ref_dist and cur_dist:
         labels = sorted(set(ref_dist) | set(cur_dist))
-        df_pred = pd.DataFrame(
-            {
-                "Class": labels * 2,
-                "Share": [ref_dist.get(lbl, 0) for lbl in labels]
-                + [cur_dist.get(lbl, 0) for lbl in labels],
-                "Window": ["Reference"] * len(labels) + ["Production"] * len(labels),
-            }
-        )
-        fig = px.bar(
-            df_pred,
-            x="Class",
-            y="Share",
-            color="Window",
-            barmode="group",
-            color_discrete_map={"Reference": TEAL, "Production": CORAL},
-            title=f"{task_label} — Predicted Class Distribution",
-        )
-        fig.update_layout(
-            paper_bgcolor=DARK_BLUE,
-            plot_bgcolor="#0a1628",
-            font_color="#ccd6f6",
-            margin=dict(t=50, b=10),
-            yaxis=dict(gridcolor="#1a3a5c", range=[0, 1]),
-            xaxis=dict(gridcolor="#1a3a5c"),
+        # Mirrored stream: the two halves are two genuinely different
+        # measurements of the same classes — the reference window above the
+        # baseline and the production window below it.  Both sets of shares are
+        # positive; the downward direction is a drawing convention and the
+        # hover and axis ticks both report the true positive share.
+        fig = mirrored_stream(
+            labels,
+            {"share": [float(ref_dist.get(lbl, 0.0)) for lbl in labels]},
+            {"share": [float(cur_dist.get(lbl, 0.0)) for lbl in labels]},
+            up_name="Reference window",
+            down_name="Production window",
+            colors={"share": accent},
+            value_name="Share",
+            value_format=".3f",
+            title=f"{task_label} — predicted class distribution",
+            height=360,
         )
         st.plotly_chart(fig, use_container_width=True)
 
+        theme.sonar_card(
+            [
+                (
+                    lbl.replace("_", " ").title(),
+                    f"{float(ref_dist.get(lbl, 0.0)):.3f} → {float(cur_dist.get(lbl, 0.0)):.3f}",
+                    theme.DANGER
+                    if abs(float(cur_dist.get(lbl, 0.0)) - float(ref_dist.get(lbl, 0.0))) >= 0.05
+                    else theme.TEXT_BRIGHT,
+                )
+                for lbl in labels
+            ],
+            accent=accent,
+        )
 
-col_h, col_r = st.columns(2)
+
+col_h, col_r = st.columns(2, gap="large")
 with col_h:
-    st.subheader("Reef Health")
-    _render_pred_drift(pred_h, "Reef Health", TEAL)
+    st.markdown("##### Reef Health")
+    _render_pred_drift(pred_h, "Reef Health", theme.AQUA)
 with col_r:
-    st.subheader("Restoration Suitability")
-    _render_pred_drift(pred_r, "Restoration Suitability", CORAL)
+    st.markdown("##### Restoration Suitability")
+    _render_pred_drift(pred_r, "Restoration Suitability", theme.CORAL)
 
 st.divider()
 
@@ -297,11 +324,12 @@ st.divider()
 # Confidence Drift
 # ---------------------------------------------------------------------------
 
-st.header("Confidence Score Drift")
-st.caption(
+theme.section(
+    "Confidence Score Drift",
     "Mean model confidence (max class probability) in reference vs production window. "
     "Decreasing confidence may indicate that the production data is dissimilar from "
-    "the training distribution."
+    "the training distribution.",
+    kicker="Certainty",
 )
 
 
@@ -311,33 +339,30 @@ def _render_conf_drift(conf: dict[str, Any], task_label: str, accent: str) -> No
     mean_ref = conf.get("mean_reference", 0.0)
     mean_cur = conf.get("mean_current", 0.0)
     delta = conf.get("delta", 0.0)
-    status_color = "#e74c3c" if drifted else "#2ecc71"
+    status_color = theme.DANGER if drifted else theme.SUCCESS
     status_label = "DRIFTED" if drifted else "STABLE"
     delta_sign = "▲" if delta >= 0 else "▼"
+
     st.markdown(
-        f"<div style='background:#0a1628; border-radius:10px; "
-        f"padding:1rem 1.2rem; border-left:4px solid {accent};'>"
-        f"<div style='color:{accent}; font-weight:700; margin-bottom:6px;'>{task_label}</div>"
-        f"<div style='display:flex; gap:2rem;'>"
-        f"<div><div style='color:#8892b0; font-size:0.78rem;'>REFERENCE</div>"
-        f"<div style='color:#ccd6f6; font-size:1.2rem; font-weight:700;'>{mean_ref:.3f}</div></div>"
-        f"<div><div style='color:#8892b0; font-size:0.78rem;'>PRODUCTION</div>"
-        f"<div style='color:#ccd6f6; font-size:1.2rem; font-weight:700;'>{mean_cur:.3f}</div></div>"
-        f"<div><div style='color:#8892b0; font-size:0.78rem;'>DELTA</div>"
-        f"<div style='color:{status_color}; font-size:1.2rem; font-weight:700;'>"
-        f"{delta_sign} {abs(delta):.3f}</div></div>"
-        f"<div><div style='color:#8892b0; font-size:0.78rem;'>KS p-value</div>"
-        f"<div style='color:#ccd6f6;'>{p_val:.4f}</div></div>"
-        f"<div><div style='color:#8892b0; font-size:0.78rem;'>STATUS</div>"
-        f"<div style='color:{status_color}; font-weight:700;'>{status_label}</div></div>"
-        f"</div></div>",
+        f'<div class="cs-panel__label" style="color:{accent};margin-bottom:0.4rem">'
+        f"{task_label}</div>",
         unsafe_allow_html=True,
+    )
+    theme.sonar_card(
+        [
+            ("Reference", f"{mean_ref:.3f}", theme.TEXT_BRIGHT),
+            ("Production", f"{mean_cur:.3f}", theme.TEXT_BRIGHT),
+            ("Delta", f"{delta_sign} {abs(delta):.3f}", status_color),
+            ("KS p-value", f"{p_val:.4f}", theme.TEXT_BRIGHT),
+            ("Status", status_label, status_color),
+        ],
+        accent=accent,
     )
 
 
-_render_conf_drift(conf_h, "Reef Health", TEAL)
-st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
-_render_conf_drift(conf_r, "Restoration Suitability", CORAL)
+_render_conf_drift(conf_h, "Reef Health", theme.AQUA)
+theme.spacer("0.7rem")
+_render_conf_drift(conf_r, "Restoration Suitability", theme.CORAL)
 
 st.divider()
 
@@ -345,10 +370,11 @@ st.divider()
 # HTML report links
 # ---------------------------------------------------------------------------
 
-st.header("Evidently HTML Reports")
-st.caption(
+theme.section(
+    "Evidently HTML Reports",
     "Full interactive Evidently reports (if generated with the CLI). "
-    "Open these files in a browser for detailed per-feature visualisations."
+    "Open these files in a browser for detailed per-feature visualisations.",
+    kicker="Deep dive",
 )
 
 report_health = _REPORTS_DIR / "drift_report_health.html"

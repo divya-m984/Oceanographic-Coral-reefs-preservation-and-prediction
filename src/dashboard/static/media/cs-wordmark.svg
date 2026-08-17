@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 44" width="260" height="44" role="img" aria-label="CoralSense">
+  <title>CoralSense</title>
+  <!-- Self-authored mark: a sonar return over a reef contour. No third-party asset. -->
+  <g fill="none" stroke="#7fe9f0" stroke-width="2.2" stroke-linecap="round">
+    <path d="M10 30 q7-11 15 0 t15 0" opacity="0.55"/>
+    <path d="M6 22 q11-17 24 0 t24 0" opacity="0.32"/>
+  </g>
+  <circle cx="25" cy="30" r="3.1" fill="#bafcff"/>
+  <text x="70" y="29" font-family="Inter, Segoe UI, system-ui, sans-serif"
+        font-size="21" font-weight="700" letter-spacing="-0.4" fill="#eaf4ff">CoralSense</text>
+  <text x="70" y="40" font-family="Inter, Segoe UI, system-ui, sans-serif"
+        font-size="7.6" font-weight="600" letter-spacing="2.6" fill="#6ea8c4">SONAR HABITAT INTELLIGENCE</text>
+</svg>

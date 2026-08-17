@@ -29,11 +29,13 @@ httpx>=0.27          # FastAPI test client dependency
 # ── Dashboard ────────────────────────────────────────────────────────────────
 streamlit>=1.40
 # plotly<6 is required by evidently 0.7 (declares plotly>=5.10,<6).
-# The >=5.24 floor is required by us: px.scatter_map (Reef Map page) was
-# introduced in plotly 5.24.0 — 5.10-5.23 do not have it.
+# The >=5.24 floor keeps this manifest in step with requirements-dashboard.txt.
 plotly>=5.24,<6
-folium>=0.19
-streamlit-folium>=0.22
+# Leaflet, for the bathymetric Reef Map: the ocean floor is a GEBCO WMS layer,
+# which folium supports natively and no plotly map trace can consume.
+# See src/dashboard/reefmap.py.
+folium>=0.19,<1
+streamlit-folium>=0.22,<1
 
 # ── MLOps ────────────────────────────────────────────────────────────────────
 mlflow>=3.0

@@ -1,10 +1,22 @@
+# Base theme. Fine-grained styling lives in src/dashboard/theme.py, which is
+# injected on every page by components.set_page(). Keep these values in sync
+# with the tokens at the top of that module.
+#
+# backgroundColor is what the browser paints for the frame before the full-page
+# seascape (src/dashboard/seascape.py) renders, so it is set to the deep end of
+# that scene's water column rather than to a neutral dark.
 [theme]
 base                    = "dark"
-primaryColor            = "#00b4d8"
-backgroundColor         = "#0a1628"
-secondaryBackgroundColor = "#112240"
-textColor               = "#ccd6f6"
+primaryColor            = "#22d3ee"
+backgroundColor         = "#031b30"
+secondaryBackgroundColor = "#063049"
+textColor               = "#c9dcf0"
 font                    = "sans serif"
 
 [server]
 headless = true
+# Publishes ./static at /app/static/. This is how the licensed underwater
+# footage in static/media/ reaches the browser: a first-party path on the app's
+# own origin, so there is no CDN request and no hot-linking of someone else's
+# bandwidth. See static/media/ATTRIBUTION.md and src/dashboard/media.py.
+enableStaticServing = true

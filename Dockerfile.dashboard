@@ -20,6 +20,23 @@
 #   reports/drift_summary.json      optional — Drift + Governance pages degrade
 #                                              gracefully when absent
 #
+# Frontend assets travel with the source (COPY src/ below):
+#
+#   src/dashboard/static/media/   ~3 MB of licensed underwater footage (CC BY)
+#                                 behind the landing, plus its poster frame and
+#                                 the still used by the analytical pages.  Served
+#                                 by Streamlit's own static file server
+#                                 (server.enableStaticServing), which resolves
+#                                 ./static relative to the MAIN SCRIPT — hence
+#                                 the folder living beside app.py.  Licences and
+#                                 required attribution: static/media/ATTRIBUTION.md.
+#   src/dashboard/geo/            Natural Earth boundary/place subset behind the
+#                                 Reef Map labels.
+#
+# Nothing is fetched from a CDN at runtime.  The GEBCO WMS is the one external
+# service, and page 2 falls back to a styled abyssal background when it is
+# unreachable.
+#
 # The dashboard contacts NO MLflow service and runs NO DVC command at runtime.
 #
 # SYNTHETIC-DATA DISCLAIMER
@@ -41,9 +58,12 @@ WORKDIR /build
 #     absent.  Page 8 reads the pre-computed reports/drift_summary.json; every
 #     prediction is an HTTP call to the API over CORALSENSE_API_URL.  See the
 #     header of requirements-dashboard.txt for the per-package justification.
-#   - plotly stays on the requirements.txt range (>=5.24,<6).  px.scatter_map, used
-#     by the Reef Map page, was introduced in plotly 5.24.0, so the 5.x range fully
-#     supports this dashboard and no major-version upgrade is taken here.
+#   - plotly stays on the requirements.txt range (>=5.24,<6); the viz builders
+#     under src/dashboard/viz/ use plotly.graph_objects only, so the 5.x range
+#     fully supports this dashboard and no major-version upgrade is taken here.
+#   - folium + streamlit-folium are the Reef Map renderer.  The ocean-floor
+#     background is the GEBCO **WMS** service, which Leaflet consumes natively.
+#     Both are pure-Python wrappers around bundled JS/CSS.
 COPY requirements-dashboard.txt .
 RUN pip install --upgrade pip \
     && pip install -r requirements-dashboard.txt

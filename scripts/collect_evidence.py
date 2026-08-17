@@ -73,9 +73,9 @@ API_ENDPOINTS = [
 ]
 
 STREAMLIT_PAGES = [
-    "app.py — Home / project overview",
+    "0_Home — Cinematic landing and project overview",
     "1_Overview — Dataset summary and class distributions",
-    "2_Reef_Map — Geographic reef map (Plotly scatter_map)",
+    "2_Reef_Map — Bathymetric reef map (Leaflet + GEBCO)",
     "3_Habitat_Health — Reef health by region",
     "4_Restoration_Planning — Restoration suitability breakdown",
     "5_Predict — Live FastAPI prediction form",
