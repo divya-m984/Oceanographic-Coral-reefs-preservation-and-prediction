@@ -118,8 +118,25 @@ def _imported_top_level_modules(path: Path) -> set[str]:
     return modules
 
 
+def _module_to_path(dotted: str) -> Path | None:
+    candidate = _ROOT / Path(*dotted.split("."))
+    if candidate.with_suffix(".py").is_file():
+        return candidate.with_suffix(".py")
+    if (candidate / "__init__.py").is_file():
+        return candidate / "__init__.py"
+    return None
+
+
 def _first_party_imports(path: Path) -> set[str]:
-    """Dotted ``src.*`` module names imported by *path*."""
+    """Dotted ``src.*`` module names imported by *path*.
+
+    ``from src.dashboard import seascape, theme`` imports two *modules*, not two
+    attributes of one.  Recording only ``src.dashboard`` would stop the walk at
+    the package ``__init__`` and leave both submodules outside the closure —
+    which is exactly how ``theme.py`` escaped the forbidden-import and manifest
+    guards until the seascape was added.  So each imported name is also offered
+    as a submodule, and kept when it resolves to a real file.
+    """
     tree = ast.parse(path.read_text(), filename=str(path))
     found: set[str] = set()
     for node in ast.walk(tree):
@@ -130,16 +147,11 @@ def _first_party_imports(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom):
             if not node.level and node.module and node.module.split(".")[0] == "src":
                 found.add(node.module)
+                for alias in node.names:
+                    submodule = f"{node.module}.{alias.name}"
+                    if _module_to_path(submodule) is not None:
+                        found.add(submodule)
     return found
-
-
-def _module_to_path(dotted: str) -> Path | None:
-    candidate = _ROOT / Path(*dotted.split("."))
-    if candidate.with_suffix(".py").is_file():
-        return candidate.with_suffix(".py")
-    if (candidate / "__init__.py").is_file():
-        return candidate / "__init__.py"
-    return None
 
 
 def _closure(entrypoints: list[Path], skip: set[str]) -> tuple[set[str], set[Path]]:
@@ -251,15 +263,21 @@ def _is_real_module(name: str) -> bool:
 _STDLIB = {
     "__future__",
     "ast",
+    # collections.abc — the typing-only ABCs used across src/dashboard/viz/.
+    "collections",
     "contextlib",
     "dataclasses",
     "datetime",
     "hashlib",
+    # html.escape — hero copy flows into unsafe_allow_html.
+    "html",
     "json",
     "logging",
     "math",
     "os",
     "pathlib",
+    # random.Random — the seascape's seeded, deterministic reef.
+    "random",
     "re",
     "sys",
     "typing",
@@ -281,7 +299,7 @@ _REGISTRY_ONLY = {"src.models.predict"}
 
 _API_ENTRYPOINTS = [_ROOT / "src" / "api" / "main.py"]
 _DASHBOARD_ENTRYPOINTS = [_ROOT / "src" / "dashboard" / "app.py"] + sorted(
-    (_ROOT / "src" / "dashboard" / "pages").glob("*.py")
+    (_ROOT / "src" / "dashboard" / "views").glob("*.py")
 )
 
 
@@ -462,17 +480,38 @@ class TestDashboardRuntimeManifest:
         assert required in dashboard_reqs, f"{required} is required: {reason}"
 
     def test_plotly_stays_on_the_five_series(self):
-        """px.scatter_map needs >=5.24; plotly 6 is a major bump, not taken here."""
+        """The viz builders use plotly.graph_objects; plotly 6 is a major bump."""
         line = next(
             ln for ln in _REQ_DASHBOARD.read_text().splitlines() if ln.strip().startswith("plotly")
         )
         assert ">=5.24" in line
         assert "<6" in line
 
-    def test_excludes_folium_which_is_imported_nowhere(self, dashboard_reqs):
-        """requirements.txt still carries folium; no repository module imports it."""
-        assert "folium" not in dashboard_reqs
-        assert "streamlit-folium" not in dashboard_reqs
+    def test_includes_the_leaflet_map_renderer(self, dashboard_reqs):
+        """The Reef Map is Leaflet: folium is now a hard dashboard dependency.
+
+        This replaces the former ``test_excludes_folium_which_is_imported_nowhere``.
+        That test recorded a fact about the code — nothing imported folium — and
+        that fact changed when ``src/dashboard/reefmap.py`` was written: the
+        ocean-floor background is a GEBCO **WMS** layer, which folium consumes
+        natively and no plotly map trace can.  The assertions below are pinned to
+        the imports so the manifest cannot drift away from the code again.
+        """
+        assert "folium" in dashboard_reqs
+        assert "streamlit-folium" in dashboard_reqs
+
+        reefmap = (_ROOT / "src" / "dashboard" / "reefmap.py").read_text()
+        assert "import folium" in reefmap
+        page = (_ROOT / "src" / "dashboard" / "views" / "2_Reef_Map.py").read_text()
+        assert "from streamlit_folium import st_folium" in page
+
+    def test_reef_map_uses_no_street_basemap(self):
+        """The bathymetry is the point; a street tile layer would undo it."""
+        reefmap = (_ROOT / "src" / "dashboard" / "reefmap.py").read_text()
+        assert "wms.gebco.net" in reefmap
+        assert "tiles=None" in reefmap
+        for street in ("open-street-map", "openstreetmap", "cartodb", "stamen"):
+            assert street not in reefmap.lower(), f"{street} basemap must not be used"
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,39 @@ milestones. Commit SHAs are provided for exact traceability.
 
 ---
 
+## [Unreleased] — Dashboard frontend redesign
+
+### Changed
+- **Background is now licensed footage, not generated artwork.** The hand-authored
+  animated SVG ocean (`src/dashboard/seascape.py`, ~4,300 animated paths per page)
+  and the bordered hero card (`src/dashboard/hero.py`) are removed. The backdrop is
+  one `<video>` on the landing and one pre-graded still elsewhere —
+  `src/dashboard/cinema.py` + `src/dashboard/media.py`.
+- **Navigation moved from the sidebar to a top bar.** `src/dashboard/app.py` is now
+  an `st.navigation(position="top")` router declaring pages with `st.Page`.
+- **`src/dashboard/pages/` renamed to `src/dashboard/views/`.** Required: a `pages/`
+  folder beside the entrypoint is auto-discovered and would render a second,
+  competing navigation.
+
+  **URLs are unchanged.** Each `st.Page` pins the `url_path` that auto-discovery
+  used to derive from the filename: `/Overview`, `/Reef_Map`, `/Habitat_Health`,
+  `/Restoration_Planning`, `/Predict`, `/Model_Performance`, `/MLOps_Status`,
+  `/Drift_Monitoring`, `/Governance`. The landing is the default page at `/`.
+
+  Callers that referenced page *files* must update: `src/dashboard/pages/X.py` ->
+  `src/dashboard/views/X.py`. This affected the release workflow's page-render
+  sweep and the test suite.
+- `components.set_page()` no longer calls `st.set_page_config` — under
+  `st.navigation` the entrypoint owns it, and a second call raises. It now injects
+  the theme and renders the background stage, and takes a `motion=` flag that only
+  the landing sets.
+- The sidebar is filters-only; brand and service status left the rail.
+
+### Added
+- `src/dashboard/static/media/` — CC BY underwater footage, poster and reef still,
+  with `ATTRIBUTION.md` recording source, creator, licence, URL and changes made.
+- `server.enableStaticServing = true` in `.streamlit/config.toml`.
+
 ## M14 — Release Readiness and Course Evidence
 
 **Commit:** (see `git log --oneline -1`)

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.dashboard import theme
 from src.dashboard.api_client import APIClient, APIError
 from src.dashboard.components import (
     DISCLAIMER_SHORT,
@@ -31,10 +32,11 @@ set_page("Predict")
 
 render_sidebar(show_region_filter=False)
 
-st.title("Live Prediction Interface")
-st.caption(
+theme.page_header(
+    "Live Prediction Interface",
     "Enter raw sonar and environmental sensor values to request predictions "
-    "from the FastAPI champion models. All predictions are on synthetic data."
+    "from the FastAPI champion models. All predictions are on synthetic data.",
+    eyebrow="Inference",
 )
 
 st.info(
@@ -76,11 +78,14 @@ REGION_OPTIONS = [
 # Prediction form
 # ---------------------------------------------------------------------------
 
+theme.section(
+    "Sensor Input",
+    "All 16 inference features are required. Numeric bounds match the API validation schema.",
+    kicker="Observation",
+)
+
 with st.form("predict_form"):
-    st.subheader("Sensor Input")
-    st.caption(
-        "All 16 inference features are required. Numeric bounds match the API validation schema."
-    )
+    theme.group("Survey location", step=1)
 
     region = st.selectbox(
         "Reef Region",
@@ -89,7 +94,7 @@ with st.form("predict_form"):
         help="One of the four supported Indian prototype reef regions.",
     )
 
-    st.markdown("**Depth and Water Column**")
+    theme.group("Depth and water column", step=2)
     c1, c2, c3 = st.columns(3)
     with c1:
         depth_m = st.number_input(
@@ -119,7 +124,7 @@ with st.form("predict_form"):
             help="Practical salinity in ppt (20–50).",
         )
 
-    st.markdown("**Water Chemistry**")
+    theme.group("Water chemistry", step=3)
     c4, c5, c6 = st.columns(3)
     with c4:
         ph = st.number_input(
@@ -149,7 +154,7 @@ with st.form("predict_form"):
             help="Water turbidity in NTU (0–100).",
         )
 
-    st.markdown("**Hydrodynamics and Light**")
+    theme.group("Hydrodynamics and light", step=4)
     c7, c8 = st.columns(2)
     with c7:
         light_intensity = st.number_input(
@@ -170,7 +175,7 @@ with st.form("predict_form"):
             help="Near-bottom current speed (0–5 m/s).",
         )
 
-    st.markdown("**Sonar / Structural Features**")
+    theme.group("Sonar / structural features", step=5)
     c9, c10, c11, c12 = st.columns(4)
     with c9:
         sonar_backscatter = st.number_input(
@@ -209,7 +214,7 @@ with st.form("predict_form"):
             help="Normalised acoustic complexity [0, 1].",
         )
 
-    st.markdown("**Biological Condition**")
+    theme.group("Biological condition", step=6)
     c13, c14, c15 = st.columns(3)
     with c13:
         coral_cover_percentage = st.number_input(
@@ -239,6 +244,7 @@ with st.form("predict_form"):
             help="Disease-affected colony fraction (0–100).",
         )
 
+    theme.spacer("1.4rem")
     submitted = st.form_submit_button(
         "Request Prediction",
         type="primary",
@@ -283,15 +289,20 @@ if submitted:
 
     if predict_ok:
         st.success("Prediction received from the FastAPI service.")
-        st.divider()
 
-        res_col, rest_col = st.columns(2)
+        theme.section(
+            "Prediction Result",
+            "Both champion models scored the same observation independently.",
+            kicker="Champion models",
+        )
+
+        res_col, rest_col = st.columns(2, gap="large")
         with res_col:
             render_prediction(result["health"], "Reef Health")
         with rest_col:
             render_prediction(result["restoration"], "Restoration Suitability")
 
-        st.divider()
+        theme.spacer("1.6rem")
         st.caption(
             f"Disclaimer: {DISCLAIMER_SHORT} "
             "Results displayed are from a model trained on synthetic data only."

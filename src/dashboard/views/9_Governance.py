@@ -1,5 +1,5 @@
 """
-src/dashboard/pages/9_Governance.py — Read-only model governance dashboard page.
+src/dashboard/views/9_Governance.py — Read-only model governance dashboard page.
 
 Displays:
 - Champion model metadata (from MLflow registry via FastAPI /model-info)
@@ -19,11 +19,11 @@ from pathlib import Path
 
 import streamlit as st
 
-st.set_page_config(
-    page_title="Model Governance — Oceanographic MLOps",
-    page_icon="🔒",
-    layout="wide",
-)
+from src.dashboard import theme
+from src.dashboard.components import render_sidebar, set_page
+
+set_page("Model Governance", icon="🔒")
+render_sidebar(show_region_filter=False)
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _REPORTS = _ROOT / "reports"
@@ -73,8 +73,11 @@ def _get_api_url() -> str:
 
 
 # ── Page layout ────────────────────────────────────────────────────────────────
-st.title("Model Governance")
-st.caption("Read-only view. No training, promotion, or rollback controls are available here.")
+theme.page_header(
+    "Model Governance",
+    "Read-only view. No training, promotion, or rollback controls are available here.",
+    eyebrow="Accountability",
+)
 st.warning(
     "**Synthetic-data disclaimer:** All models were trained on a computer-generated "
     "synthetic dataset. Metrics do not indicate real-world coral reef prediction accuracy.",
@@ -82,7 +85,7 @@ st.warning(
 )
 
 # ── Section 1: Champion models ─────────────────────────────────────────────────
-st.header("Champion Models")
+theme.section("Champion Models", kicker="Registry")
 
 champion_data = _champion_info()
 if champion_data:
@@ -107,7 +110,7 @@ else:
     )
 
 # ── Section 2: Drift status ────────────────────────────────────────────────────
-st.header("Drift Monitoring Status")
+theme.section("Drift Monitoring Status", kicker="Model health")
 
 drift_path = _REPORTS / "drift_summary.json"
 drift = _load_json(drift_path)
@@ -139,7 +142,7 @@ else:
     )
 
 # ── Section 3: Retraining data contract ───────────────────────────────────────
-st.header("Retraining Data Contract")
+theme.section("Retraining Data Contract", kicker="Guardrails")
 
 st.markdown(
     """
@@ -166,7 +169,7 @@ Champion promotion additionally requires:
 )
 
 # ── Section 4: Comparison reports ─────────────────────────────────────────────
-st.header("Latest Challenger Comparison")
+theme.section("Latest Challenger Comparison", kicker="Evaluation")
 
 comparison_files = sorted(_REPORTS.glob("comparison_*.json"), reverse=True)
 if comparison_files:
@@ -209,7 +212,7 @@ else:
     )
 
 # ── Section 5: Promotion history ──────────────────────────────────────────────
-st.header("Promotion History")
+theme.section("Promotion History", kicker="Audit trail")
 
 promotion_receipts = _find_receipts("promotion_receipt")
 if promotion_receipts:
@@ -220,7 +223,7 @@ else:
     st.info("No promotion receipts found (champion has not been changed from v1).", icon="ℹ️")
 
 # ── Section 6: Rollback history ───────────────────────────────────────────────
-st.header("Rollback History")
+theme.section("Rollback History", kicker="Audit trail")
 
 rollback_receipts = _find_receipts("rollback_receipt")
 if rollback_receipts:
@@ -231,7 +234,7 @@ else:
     st.info("No rollback receipts found.", icon="ℹ️")
 
 # ── Section 7: Governance explanation ─────────────────────────────────────────
-st.header("Governance Explanation")
+theme.section("Governance Explanation", kicker="Policy")
 
 st.markdown(
     """

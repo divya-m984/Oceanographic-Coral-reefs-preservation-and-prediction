@@ -443,7 +443,13 @@ jobs:
           print("Dashboard reached the API over CORALSENSE_API_URL; both champions are v1.")
 
           root = pathlib.Path("src/dashboard")
-          scripts = [root / "app.py"] + sorted((root / "pages").glob("*.py"))
+          # app.py is the st.navigation router; running it renders the default
+          # page (0_Home). The landing uses st.page_link, which can only resolve
+          # under the router, so it is covered through app.py rather than
+          # standalone. Every other view is a plain script and runs directly.
+          scripts = [root / "app.py"] + [
+              p for p in sorted((root / "views").glob("*.py")) if p.name != "0_Home.py"
+          ]
           for script in scripts:
               at = AppTest.from_file(str(script), default_timeout=90).run()
               assert len(at.exception) == 0, f"{script.name}: {at.exception}"

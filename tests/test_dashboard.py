@@ -39,7 +39,7 @@ import requests
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DASHBOARD_DIR = _PROJECT_ROOT / "src" / "dashboard"
-_PAGES_DIR = _DASHBOARD_DIR / "pages"
+_PAGES_DIR = _DASHBOARD_DIR / "views"
 
 
 def resolve_app_path(script_path: str | Path) -> Path:
@@ -832,7 +832,7 @@ class TestNoForbiddenImports:
 # Disclaimer presence in page files
 # ---------------------------------------------------------------------------
 
-_PAGE_FILES = list((_PROJECT_ROOT / "src" / "dashboard" / "pages").rglob("*.py"))
+_PAGE_FILES = list((_PROJECT_ROOT / "src" / "dashboard" / "views").rglob("*.py"))
 
 
 class TestDisclaimerPresence:
@@ -925,7 +925,7 @@ class TestAppSmoke:
 
         with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
             MockClient.return_value.health.return_value = {"status": "ok"}
-            at = self._get_at("src/dashboard/pages/1_Overview.py")
+            at = self._get_at("src/dashboard/views/1_Overview.py")
             at.run()
             assert len(at.exception) == 0
 
@@ -935,7 +935,7 @@ class TestAppSmoke:
         with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
             MockClient.return_value.health.side_effect = APIError("offline")
             MockClient.return_value.model_info.side_effect = APIError("offline")
-            at = self._get_at("src/dashboard/pages/7_MLOps_Status.py")
+            at = self._get_at("src/dashboard/views/7_MLOps_Status.py")
             at.run()
             assert len(at.exception) == 0
 
@@ -945,7 +945,7 @@ class TestAppSmoke:
 
         with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
             MockClient.return_value.health.side_effect = APIError("offline")
-            at = self._get_at("src/dashboard/pages/5_Predict.py")
+            at = self._get_at("src/dashboard/views/5_Predict.py")
             at.run()
             assert len(at.exception) == 0
 
@@ -959,7 +959,7 @@ class TestAppSmoke:
 
         with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
             MockClient.return_value.health.side_effect = APIError("offline")
-            at = self._get_at("src/dashboard/pages/6_Model_Performance.py")
+            at = self._get_at("src/dashboard/views/6_Model_Performance.py")
             at.run()
             assert len(at.exception) == 0
 
@@ -971,7 +971,7 @@ class TestAppSmoke:
         # directory, so the "summary missing" branch is genuinely exercised
         # without deleting the real reports/drift_summary.json.
         assert not (isolated_reports_dir / "drift_summary.json").exists()
-        page_path = "src/dashboard/pages/8_Drift_Monitoring.py"
+        page_path = "src/dashboard/views/8_Drift_Monitoring.py"
         with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
             MockClient.return_value.health.side_effect = APIError("offline")
             at = self._get_at(page_path)
@@ -1057,7 +1057,7 @@ class TestAppSmoke:
         summary_path = isolated_reports_dir / "drift_summary.json"
         summary_path.write_text(json.dumps(drift_summary))
 
-        page_path = "src/dashboard/pages/8_Drift_Monitoring.py"
+        page_path = "src/dashboard/views/8_Drift_Monitoring.py"
         with mock.patch("src.dashboard.api_client.APIClient") as MockClient:
             MockClient.return_value.health.side_effect = APIError("offline")
             at = self._get_at(page_path)
@@ -1078,11 +1078,11 @@ class TestAppTestPathResolution:
 
     _SMOKE_SCRIPTS = (
         "src/dashboard/app.py",
-        "src/dashboard/pages/1_Overview.py",
-        "src/dashboard/pages/5_Predict.py",
-        "src/dashboard/pages/6_Model_Performance.py",
-        "src/dashboard/pages/7_MLOps_Status.py",
-        "src/dashboard/pages/8_Drift_Monitoring.py",
+        "src/dashboard/views/1_Overview.py",
+        "src/dashboard/views/5_Predict.py",
+        "src/dashboard/views/6_Model_Performance.py",
+        "src/dashboard/views/7_MLOps_Status.py",
+        "src/dashboard/views/8_Drift_Monitoring.py",
     )
 
     def test_main_app_path_is_absolute(self):
@@ -1107,12 +1107,12 @@ class TestAppTestPathResolution:
         pages = sorted(p.name for p in _PAGES_DIR.glob("*.py"))
         assert pages, "no dashboard pages found"
         for name in pages:
-            assert resolve_app_path(f"src/dashboard/pages/{name}").is_file()
+            assert resolve_app_path(f"src/dashboard/views/{name}").is_file()
 
     def test_resolution_is_independent_of_cwd(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         assert resolve_app_path("src/dashboard/app.py") == _DASHBOARD_DIR / "app.py"
-        assert resolve_app_path("src/dashboard/pages/8_Drift_Monitoring.py").is_file()
+        assert resolve_app_path("src/dashboard/views/8_Drift_Monitoring.py").is_file()
 
     def test_absolute_input_is_not_joined_twice(self):
         absolute = _PAGES_DIR / "8_Drift_Monitoring.py"
@@ -1126,7 +1126,7 @@ class TestAppTestPathResolution:
 
     def test_missing_script_raises_useful_error(self):
         with pytest.raises(AssertionError, match="dashboard script not found"):
-            resolve_app_path("src/dashboard/pages/does_not_exist.py")
+            resolve_app_path("src/dashboard/views/does_not_exist.py")
 
     def test_smoke_helper_hands_apptest_an_absolute_path(self, tmp_path, monkeypatch):
         """The helper used by every smoke test must never pass a relative path."""

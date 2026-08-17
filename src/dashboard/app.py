@@ -1,12 +1,26 @@
 """
-src/dashboard/app.py — CoralSense home page.
+src/dashboard/app.py — CoralSense router.
 
 Launch
 ------
-    streamlit run src/dashboard/app.py
+    python -m streamlit run src/dashboard/app.py
 
-This is the entry point for the multi-page Streamlit dashboard.
-Streamlit automatically discovers pages in src/dashboard/pages/.
+This file is the entrypoint and does one job: declare the pages and run the
+navigation.  All page content lives in ``src/dashboard/views/``.
+
+Navigation
+----------
+The dashboard used Streamlit's automatic ``pages/`` discovery, which can only
+render navigation in the sidebar.  It now declares pages explicitly with
+``st.Page`` and runs ``st.navigation(..., position="top")``, so the primary
+navigation is a horizontal bar and the sidebar is free for page filters.
+
+**URLs are preserved.**  Automatic discovery derived a URL from each filename
+(``1_Overview.py`` -> ``/Overview``).  Every ``st.Page`` below pins the same
+value with ``url_path``, so existing links keep working even though the scripts
+moved from ``pages/`` to ``views/``.  The directory had to be renamed: a
+``pages/`` folder next to the entrypoint is auto-discovered, and that would have
+produced a second, competing set of navigation entries.
 
 SYNTHETIC-DATA DISCLAIMER
 --------------------------
@@ -17,256 +31,56 @@ coral-reef conservation decisions.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
-from src.dashboard.components import (
-    CORAL,
-    DARK_BLUE,
-    DISCLAIMER_FULL,
-    HEALTH_COLORS,
-    NAVY,
-    REGIONS,
-    RESTORATION_COLORS,
-    TEAL,
-    render_sidebar,
-    set_page,
-)
-from src.dashboard.data_loader import load_observations
+from src.dashboard import media
 
-set_page("Home", layout="wide")
-
-render_sidebar(show_region_filter=False)
+_VIEWS = Path(__file__).resolve().parent / "views"
 
 # ---------------------------------------------------------------------------
-# Header
+# Page configuration
+#
+# Under st.navigation the entrypoint owns the page config; individual views must
+# not call st.set_page_config again.  The sidebar starts collapsed because the
+# landing has nothing to put in it — only the three filtered pages do.
 # ---------------------------------------------------------------------------
 
-st.markdown(
-    f"<div style='background:linear-gradient(135deg, {NAVY} 0%, #0d2040 100%); "
-    f"border-radius:12px; padding:2rem 2.5rem; margin-bottom:1.5rem; "
-    f"border:1px solid #1a3a5c;'>"
-    f"<div style='color:{TEAL}; font-size:0.85rem; font-weight:600; "
-    f"letter-spacing:2px; text-transform:uppercase;'>Oceanographic Research Platform</div>"
-    f"<h1 style='color:#ccd6f6; font-size:2rem; font-weight:700; margin:0.5rem 0;'>"
-    f"CoralSense — Sonar Habitat Intelligence</h1>"
-    f"<p style='color:#8892b0; font-size:0.95rem; max-width:750px; margin:0;'>"
-    f"A Machine Learning-Driven Sonar Framework for Real-Time Coral Reef Habitat "
-    f"Prediction and Marine Ecosystem Monitoring</p>"
-    f"</div>",
-    unsafe_allow_html=True,
+st.set_page_config(
+    page_title="CoralSense",
+    page_icon=":ocean:",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-# Disclaimer banner
-st.error(
-    "**SYNTHETIC DATA ONLY** — All observations in this dashboard are computer-generated "
-    "for academic demonstration purposes. These are not real ocean sensor readings."
-)
+_wordmark = media.path("cs-wordmark.svg")
+if _wordmark.is_file():
+    st.logo(str(_wordmark), size="large", link=None)
 
-# ---------------------------------------------------------------------------
-# Dataset statistics
-# ---------------------------------------------------------------------------
 
-try:
-    df = load_observations()
-    n_obs = len(df)
-    n_regions = df["region"].nunique()
-    n_health = df["reef_health"].nunique()
-    n_rest = df["restoration_suitability"].nunique()
-    n_train = int(n_obs * 0.8)
-    n_test = n_obs - n_train
-    data_ok = True
-except Exception:
-    n_obs = n_regions = n_health = n_rest = n_train = n_test = 0
-    data_ok = False
+def _page(script: str, title: str, url_path: str, **kwargs) -> st.Page:
+    """Declare one page, pinning the URL its filename used to produce."""
+    return st.Page(_VIEWS / script, title=title, url_path=url_path, **kwargs)
 
-col1, col2, col3, col4, col5 = st.columns(5)
-metric_style = (
-    f"background:{DARK_BLUE}; border-radius:10px; padding:1rem 1.2rem; "
-    f"text-align:center; border:1px solid #1a3a5c;"
-)
 
-with col1:
-    st.markdown(
-        f"<div style='{metric_style}'>"
-        f"<div style='color:{TEAL}; font-size:0.75rem; font-weight:600; "
-        f"letter-spacing:1px;'>OBSERVATIONS</div>"
-        f"<div style='color:#ccd6f6; font-size:2rem; font-weight:700;'>{n_obs:,}</div>"
-        f"<div style='color:#8892b0; font-size:0.75rem;'>synthetic records</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+# The six labels the brief names as primary, then the operational pages.
+# Streamlit's top navigation moves whatever does not fit into an overflow menu,
+# so ordering here is what decides visibility on a narrow window.
+PRIMARY = [
+    _page("0_Home.py", "Home", "home", default=True),
+    _page("1_Overview.py", "Overview", "Overview"),
+    _page("2_Reef_Map.py", "Reef Map", "Reef_Map"),
+    _page("3_Habitat_Health.py", "Habitat", "Habitat_Health"),
+    _page("4_Restoration_Planning.py", "Restoration", "Restoration_Planning"),
+    _page("5_Predict.py", "Predict", "Predict"),
+    _page("6_Model_Performance.py", "Models", "Model_Performance"),
+]
 
-with col2:
-    st.markdown(
-        f"<div style='{metric_style}'>"
-        f"<div style='color:{TEAL}; font-size:0.75rem; font-weight:600; "
-        f"letter-spacing:1px;'>REGIONS</div>"
-        f"<div style='color:#ccd6f6; font-size:2rem; font-weight:700;'>{n_regions}</div>"
-        f"<div style='color:#8892b0; font-size:0.75rem;'>prototype reef zones</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+OPERATIONS = [
+    _page("7_MLOps_Status.py", "MLOps Status", "MLOps_Status"),
+    _page("8_Drift_Monitoring.py", "Drift Monitoring", "Drift_Monitoring"),
+    _page("9_Governance.py", "Governance", "Governance"),
+]
 
-with col3:
-    st.markdown(
-        f"<div style='{metric_style}'>"
-        f"<div style='color:{TEAL}; font-size:0.75rem; font-weight:600; "
-        f"letter-spacing:1px;'>HEALTH CLASSES</div>"
-        f"<div style='color:#ccd6f6; font-size:2rem; font-weight:700;'>{n_health}</div>"
-        f"<div style='color:#8892b0; font-size:0.75rem;'>reef condition labels</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
-with col4:
-    st.markdown(
-        f"<div style='{metric_style}'>"
-        f"<div style='color:{TEAL}; font-size:0.75rem; font-weight:600; "
-        f"letter-spacing:1px;'>RESTORATION CLASSES</div>"
-        f"<div style='color:#ccd6f6; font-size:2rem; font-weight:700;'>{n_rest}</div>"
-        f"<div style='color:#8892b0; font-size:0.75rem;'>suitability labels</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
-with col5:
-    st.markdown(
-        f"<div style='{metric_style}'>"
-        f"<div style='color:{TEAL}; font-size:0.75rem; font-weight:600; "
-        f"letter-spacing:1px;'>TRAIN / TEST</div>"
-        f"<div style='color:#ccd6f6; font-size:1.4rem; font-weight:700;'>"
-        f"{n_train:,} / {n_test:,}</div>"
-        f"<div style='color:#8892b0; font-size:0.75rem;'>80 / 20 stratified split</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
-st.divider()
-
-# ---------------------------------------------------------------------------
-# System overview
-# ---------------------------------------------------------------------------
-
-left, right = st.columns([3, 2])
-
-with left:
-    st.subheader("Project Objective")
-    st.markdown(
-        """
-        CoralSense is a proof-of-concept MLOps platform that demonstrates how
-        acoustic sonar data combined with environmental sensor readings can be used
-        to classify coral-reef habitat condition and assess restoration suitability.
-
-        **Two classification tasks are supported:**
-
-        - **Reef Health** — Assigns each observation to one of four condition classes:
-          *Healthy*, *Stressed*, *Bleached*, or *Severely Degraded*.
-        - **Restoration Suitability** — Classifies whether a reef site is *Suitable*,
-          *Moderately Suitable*, or *Unsuitable* for intervention.
-
-        **Sonar-first design:**
-        The platform treats acoustic backscatter, rugosity index, and acoustic
-        complexity index as primary structural indicators of substrate condition.
-        Environmental parameters (temperature, pH, dissolved oxygen, turbidity)
-        serve as complementary ecological indicators. This distinction reflects
-        how sonar surveys are typically used in reef mapping before in-situ
-        biological surveys are conducted.
-        """
-    )
-
-    st.subheader("Classification Labels")
-    hcol, rcol = st.columns(2)
-    with hcol:
-        st.markdown("**Reef Health**")
-        for cls in ("healthy", "stressed", "bleached", "severely_degraded"):
-            color = HEALTH_COLORS[cls]
-            label = cls.replace("_", " ").title()
-            st.markdown(
-                f"<span style='background:{color}20; color:{color}; "
-                f"padding:2px 10px; border-radius:12px; font-size:0.85rem; "
-                f"border:1px solid {color}60;'>{label}</span>&nbsp;",
-                unsafe_allow_html=True,
-            )
-            st.markdown("")
-    with rcol:
-        st.markdown("**Restoration Suitability**")
-        for cls in ("suitable", "moderately_suitable", "unsuitable"):
-            color = RESTORATION_COLORS[cls]
-            label = cls.replace("_", " ").title()
-            st.markdown(
-                f"<span style='background:{color}20; color:{color}; "
-                f"padding:2px 10px; border-radius:12px; font-size:0.85rem; "
-                f"border:1px solid {color}60;'>{label}</span>&nbsp;",
-                unsafe_allow_html=True,
-            )
-            st.markdown("")
-
-with right:
-    st.subheader("Champion Models")
-    st.markdown(
-        f"<div style='background:{DARK_BLUE}; border-radius:10px; "
-        f"padding:1rem 1.2rem; margin-bottom:0.8rem; border-left:4px solid {TEAL};'>"
-        f"<div style='color:{TEAL}; font-size:0.75rem; font-weight:600; "
-        f"letter-spacing:1px;'>REEF HEALTH</div>"
-        f"<div style='color:#ccd6f6; font-size:1rem; font-weight:600; margin-top:4px;'>"
-        f"Logistic Regression v1</div>"
-        f"<div style='color:#8892b0; font-size:0.82rem;'>CV macro-F1: 0.761 | "
-        f"Test macro-F1: 0.787</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f"<div style='background:{DARK_BLUE}; border-radius:10px; "
-        f"padding:1rem 1.2rem; margin-bottom:0.8rem; border-left:4px solid {CORAL};'>"
-        f"<div style='color:{CORAL}; font-size:0.75rem; font-weight:600; "
-        f"letter-spacing:1px;'>RESTORATION SUITABILITY</div>"
-        f"<div style='color:#ccd6f6; font-size:1rem; font-weight:600; margin-top:4px;'>"
-        f"XGBoost v1</div>"
-        f"<div style='color:#8892b0; font-size:0.82rem;'>CV macro-F1: 0.791 | "
-        f"Test macro-F1: 0.803</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("MLOps Pipeline")
-    pipeline_steps = [
-        ("Data Generation", "M2", "#2ecc71"),
-        ("Schema Validation", "M3", "#2ecc71"),
-        ("Preprocessing", "M4", "#2ecc71"),
-        ("Model Training", "M5", "#2ecc71"),
-        ("Model Registry", "M6", "#2ecc71"),
-        ("DVC Pipeline", "M7", "#2ecc71"),
-        ("CI / CD", "M8", "#2ecc71"),
-        ("FastAPI Serving", "M9", "#2ecc71"),
-        ("Dashboard", "M10", TEAL),
-        ("Drift Monitoring", "M11", "#8892b0"),
-        ("Docker Deploy", "M12", "#8892b0"),
-    ]
-    for step, milestone, color in pipeline_steps:
-        icon = "✓" if color == "#2ecc71" else ("●" if color == TEAL else "○")
-        st.markdown(
-            f"<div style='display:flex; align-items:center; "
-            f"margin:0.2rem 0; font-size:0.85rem;'>"
-            f"<span style='color:{color}; width:18px;'>{icon}</span>"
-            f"<span style='color:#ccd6f6; flex:1;'>{step}</span>"
-            f"<span style='color:#8892b0; font-size:0.75rem;'>{milestone}</span>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    st.subheader("Covered Reef Regions")
-    for r in REGIONS:
-        st.markdown(f"- {r}")
-
-st.divider()
-
-# Full disclaimer
-st.markdown(
-    f"<div style='background:#1a0a0a; border:1px solid {CORAL}40; "
-    f"border-radius:8px; padding:1rem 1.2rem;'>"
-    f"<div style='color:{CORAL}; font-size:0.8rem; font-weight:700; "
-    f"margin-bottom:0.4rem;'>SYNTHETIC DATA DISCLAIMER</div>"
-    f"<div style='color:#c0a090; font-size:0.82rem;'>{DISCLAIMER_FULL}</div>"
-    f"</div>",
-    unsafe_allow_html=True,
-)
+st.navigation({"": PRIMARY, "Operations": OPERATIONS}, position="top").run()

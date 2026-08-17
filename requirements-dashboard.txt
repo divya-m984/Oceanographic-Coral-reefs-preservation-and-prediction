@@ -30,9 +30,6 @@
 #                                   declares uvicorn<1,>=0.30 as a hard
 #                                   dependency for its own server, ~1 MB)
 #   shap, pandera, scipy            training/validation-time only
-#   folium, streamlit-folium        listed in requirements.txt but imported
-#                                   nowhere in the repository — the Reef Map
-#                                   page uses plotly.express.scatter_map
 #   pytest, ruff                    development tooling
 #
 # Python 3.12 (see Dockerfile.dashboard).
@@ -42,14 +39,26 @@
 streamlit>=1.40
 
 # ── Charts ───────────────────────────────────────────────────────────────────
-# plotly.express is imported by pages 2, 3, 4, 6 and 8.
+# plotly.graph_objects backs every builder in src/dashboard/viz/ (mountain,
+# stream, contour, wireframe), which pages 1, 3, 4, 5, 6 and 8 render.
 #
 # The <6 cap is inherited verbatim from requirements.txt.  Nothing in this image
 # needs it (the cap exists because evidently 0.7 declares plotly<6, and evidently
 # is not installed here), but plotly 6 is a major version and this task does not
-# upgrade major versions.  The >=5.24 floor IS required by us: px.scatter_map,
-# used by the Reef Map page, was introduced in plotly 5.24.0.
+# upgrade major versions.  The >=5.24 floor is kept in step with requirements.txt
+# so the two manifests never disagree about which plotly this project supports.
 plotly>=5.24,<6
+
+# ── Bathymetric map (Reef Map page) ──────────────────────────────────────────
+# src/dashboard/reefmap.py builds a Leaflet map with folium and page 2 embeds it
+# with streamlit-folium.  Leaflet is required rather than optional: the ocean
+# floor is a GEBCO **WMS** layer (folium.raster_layers.WmsTileLayer), and no
+# plotly map trace can consume a WMS service.  Both are pure-Python wrappers
+# around bundled JS/CSS; neither loads a model or touches the filesystem.
+#
+# Upper caps pin the majors that this code was written against.
+folium>=0.19,<1
+streamlit-folium>=0.22,<1
 
 # ── Data handling ────────────────────────────────────────────────────────────
 # src/dashboard/data_loader.py reads data/raw/observations.csv; pages filter and

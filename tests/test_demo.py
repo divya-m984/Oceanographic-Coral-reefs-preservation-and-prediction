@@ -1265,7 +1265,7 @@ class TestMakefile:
 
 
 class TestGovernancePage:
-    _PAGE = _ROOT / "src" / "dashboard" / "pages" / "9_Governance.py"
+    _PAGE = _ROOT / "src" / "dashboard" / "views" / "9_Governance.py"
 
     def test_governance_page_exists(self):
         assert self._PAGE.exists()

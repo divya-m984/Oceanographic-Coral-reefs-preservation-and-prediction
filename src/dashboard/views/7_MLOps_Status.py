@@ -15,12 +15,9 @@ from typing import Any
 
 import streamlit as st
 
+from src.dashboard import theme
 from src.dashboard.api_client import APIClient, APIError
 from src.dashboard.components import (
-    CORAL,
-    CYAN,
-    DARK_BLUE,
-    TEAL,
     render_sidebar,
     set_page,
 )
@@ -29,10 +26,11 @@ set_page("MLOps Status")
 
 render_sidebar(show_region_filter=False)
 
-st.title("MLOps Pipeline Status")
-st.caption(
+theme.page_header(
+    "MLOps Pipeline Status",
     "Factual status of every milestone in the CoralSense end-to-end "
-    "machine learning operations pipeline."
+    "machine learning operations pipeline.",
+    eyebrow="Operations",
 )
 
 # ---------------------------------------------------------------------------
@@ -157,35 +155,48 @@ PIPELINE = [
 ]
 
 STATUS_CONFIG = {
-    STATUS_DONE: ("#2ecc71", "✓", "Complete"),
-    STATUS_CURRENT: (TEAL, "●", "Current Milestone"),
-    STATUS_PLANNED: ("#8892b0", "○", "Planned"),
+    STATUS_DONE: (theme.SUCCESS, "✓", "Complete"),
+    STATUS_CURRENT: (theme.AQUA, "●", "Current"),
+    STATUS_PLANNED: (theme.TEXT_DIM, "○", "Planned"),
 }
+
+_completed = sum(1 for row in PIPELINE if row[0] == STATUS_DONE)
+theme.stat_row(
+    [
+        {
+            "label": "Milestones complete",
+            "value": f"{_completed} / {len(PIPELINE)}",
+            "caption": "delivered end to end",
+            "accent": theme.SUCCESS,
+        },
+        {
+            "label": "In progress",
+            "value": f"{sum(1 for row in PIPELINE if row[0] == STATUS_CURRENT)}",
+            "caption": "current milestone",
+            "accent": theme.AQUA,
+        },
+        {
+            "label": "Planned",
+            "value": f"{sum(1 for row in PIPELINE if row[0] == STATUS_PLANNED)}",
+            "caption": "not yet implemented",
+            "accent": theme.TEXT_DIM,
+        },
+    ]
+)
+
+theme.section("Pipeline Milestones", kicker="Delivery log")
 
 for status, milestone, name, category, description, files in PIPELINE:
     color, icon, label = STATUS_CONFIG[status]
-    st.markdown(
-        f"<div style='background:{DARK_BLUE}; border-radius:10px; "
-        f"padding:0.8rem 1.2rem; margin:0.4rem 0; "
-        f"border-left:4px solid {color};'>"
-        f"<div style='display:flex; align-items:flex-start; gap:0.8rem;'>"
-        f"<div style='min-width:30px; color:{color}; font-size:1.1rem; "
-        f"font-weight:700; padding-top:2px;'>{icon}</div>"
-        f"<div style='flex:1;'>"
-        f"<div style='display:flex; align-items:center; gap:0.5rem; margin-bottom:2px;'>"
-        f"<span style='color:{CYAN}; font-size:0.75rem; font-weight:600; "
-        f"background:#0a1628; padding:1px 6px; border-radius:4px; "
-        f"border:1px solid {color}40;'>{milestone}</span>"
-        f"<span style='color:#ccd6f6; font-weight:700;'>{name}</span>"
-        f"<span style='color:#8892b0; font-size:0.78rem;'>— {category}</span>"
-        f"<span style='color:{color}; font-size:0.72rem; margin-left:auto; "
-        f"background:{color}15; padding:1px 8px; border-radius:10px; "
-        f"border:1px solid {color}40;'>{label}</span>"
-        f"</div>"
-        f"<div style='color:#8892b0; font-size:0.85rem;'>{description}</div>"
-        f"<div style='color:#4a5568; font-size:0.75rem; margin-top:2px;'>{files}</div>"
-        f"</div></div></div>",
-        unsafe_allow_html=True,
+    theme.status_row(
+        name=name,
+        description=description,
+        accent=color,
+        icon=icon,
+        tag=milestone,
+        category=category,
+        status=label,
+        files=files,
     )
 
 st.divider()
@@ -194,8 +205,11 @@ st.divider()
 # Live champion metadata from API
 # ---------------------------------------------------------------------------
 
-st.header("Champion Model Registry")
-st.caption("Safe metadata fetched from GET /model-info (no paths or URIs exposed).")
+theme.section(
+    "Champion Model Registry",
+    "Safe metadata fetched from GET /model-info (no paths or URIs exposed).",
+    kicker="Live registry",
+)
 
 try:
     client = APIClient()
@@ -207,47 +221,37 @@ except APIError as exc:
     info = {}
 
 if api_ok:
-    col_h, col_r = st.columns(2)
+    col_h, col_r = st.columns(2, gap="large")
 
     def _render_model_card(task_info: dict[str, Any], task_label: str, accent: str) -> None:
         if not task_info.get("available", False):
             st.warning(f"{task_label} champion not available.")
             return
-        st.markdown(
-            f"<div style='background:#0a1628; border-radius:10px; "
-            f"padding:1rem 1.2rem; border-left:4px solid {accent};'>"
-            f"<div style='color:{accent}; font-size:0.75rem; font-weight:600; "
-            f"letter-spacing:1px; text-transform:uppercase;'>{task_label}</div>"
-            f"<div style='color:#ccd6f6; font-size:1.05rem; font-weight:700; "
-            f"margin:4px 0;'>{task_info.get('registered_model_name', '—')}</div>"
-            f"<div style='color:#8892b0; font-size:0.85rem;'>"
-            f"Version: <strong style='color:#ccd6f6;'>{task_info.get('version', '—')}</strong>"
-            f" &nbsp;|&nbsp; Alias: "
-            f"<strong style='color:{accent};'>{task_info.get('alias', '—')}</strong>"
-            f"</div>"
-            f"<div style='color:#8892b0; font-size:0.85rem; margin-top:4px;'>"
-            f"Algorithm: <strong style='color:#ccd6f6;'>"
-            f"{task_info.get('algo_name', '—').replace('_', ' ').title()}</strong>"
-            f"</div>"
-            f"<div style='color:#8892b0; font-size:0.85rem;'>"
-            f"CV Macro F1: <strong style='color:#ccd6f6;'>"
-            f"{task_info.get('cv_macro_f1', 0):.4f}</strong>"
-            f"</div>"
-            f"<div style='color:#8892b0; font-size:0.85rem;'>"
-            f"Run ID: <code style='color:#4a5568; font-size:0.78rem;'>"
-            f"{task_info.get('run_id', '—')[:16]}…</code>"
-            f"</div>"
-            f"<div style='color:#8892b0; font-size:0.78rem; margin-top:6px;'>"
-            f"Labels: {', '.join(task_info.get('label_names', []))}"
-            f"</div>"
-            f"</div>",
-            unsafe_allow_html=True,
+        rows = [
+            ("Version", str(task_info.get("version", "—"))),
+            ("Alias", str(task_info.get("alias", "—"))),
+            ("Algorithm", str(task_info.get("algo_name", "—")).replace("_", " ").title()),
+            ("CV macro F1", f"{task_info.get('cv_macro_f1', 0):.4f}"),
+            ("Run ID", f"{task_info.get('run_id', '—')[:16]}…"),
+            ("Labels", ", ".join(task_info.get("label_names", []))),
+        ]
+        body = "".join(
+            f'<div style="display:flex;gap:0.8rem;padding:0.22rem 0;font-size:0.85rem">'
+            f'<span style="color:{theme.TEXT_DIM};min-width:96px">{key}</span>'
+            f'<span style="color:{theme.TEXT}">{value}</span></div>'
+            for key, value in rows
+        )
+        theme.panel(
+            body,
+            label=task_label,
+            title=str(task_info.get("registered_model_name", "—")),
+            accent=accent,
         )
 
     with col_h:
-        _render_model_card(info.get("health", {}), "Reef Health", TEAL)
+        _render_model_card(info.get("health", {}), "Reef Health", theme.AQUA)
     with col_r:
-        _render_model_card(info.get("restoration", {}), "Restoration Suitability", CORAL)
+        _render_model_card(info.get("restoration", {}), "Restoration Suitability", theme.CORAL)
 
     st.caption(
         "Source: GET /model-info. No internal paths, MLflow URIs or tracking "
@@ -259,15 +263,12 @@ if api_ok:
 # ---------------------------------------------------------------------------
 
 st.divider()
-st.markdown(
-    f"<div style='background:#0a1628; border:1px solid #1a3a5c; "
-    f"border-radius:8px; padding:1rem 1.2rem;'>"
-    f"<strong style='color:{TEAL};'>Drift Monitoring (M11 — Planned)</strong><br>"
-    f"<span style='color:#8892b0; font-size:0.85rem;'>"
-    f"Statistical drift detection using Evidently AI is planned for M11. "
-    f"This page will display Population Stability Index (PSI), feature drift "
-    f"heatmaps, and prediction distribution shifts between reference and production "
-    f"windows. No drift results are shown here because M11 is not yet implemented."
-    f"</span></div>",
-    unsafe_allow_html=True,
+theme.panel(
+    "Statistical drift detection using Evidently AI is planned for M11. "
+    "This page will display Population Stability Index (PSI), feature drift "
+    "heatmaps, and prediction distribution shifts between reference and production "
+    "windows. No drift results are shown here because M11 is not yet implemented.",
+    label="Roadmap",
+    title="Drift Monitoring (M11 — Planned)",
+    accent=theme.AQUA,
 )
