@@ -208,7 +208,9 @@ if data_ok:
 
 theme.section(
     "Selected Champion Models",
-    "Selection criterion: best cross-validated macro F1. All metrics computed on synthetic data.",
+    "Selection criterion: best cross-validated macro F1. All metrics computed on the "
+    "synthetic prototype dataset with algorithmically generated labels — they measure "
+    "recovery of synthetic structure, not real-world ecological validity.",
     kicker="Model registry",
 )
 

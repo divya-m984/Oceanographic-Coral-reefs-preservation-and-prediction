@@ -1854,6 +1854,24 @@ _MIGRATION_EXCEPTIONS: dict[str, str] = {
     ".github/workflows/release-images.yml": ("page-render glob follows the pages/ -> views/ move"),
 }
 
+#: Backend files the P0 scientific-disclosure hardening is allowed to touch.
+#:
+#: The 2026-08-19 dataset audit found label-construction leakage / circular
+#: supervision, and the disclosure of that finding has to reach every surface
+#: that presents metrics or predictions — which necessarily includes the API
+#: payload disclaimer and the generated model cards.  A dashboard-only edit
+#: cannot carry that disclosure.
+#:
+#: Each entry is a single named file with a stated reason, and
+#: ``test_the_disclosure_exceptions_are_only_disclosure_text`` pins that the
+#: change to each one was in fact disclosure wording, so this cannot become a
+#: general-purpose hole in the backend guard.
+_DISCLOSURE_EXCEPTIONS: dict[str, str] = {
+    "src/api/schemas.py": "_DISCLAIMER shipped in every API response payload",
+    "src/api/main.py": "module docstring + OpenAPI description disclosure",
+    "src/models/model_card.py": "_SYNTHETIC_DISCLAIMER and Limitations section",
+}
+
 
 class TestNoBackendFileWasTouched:
     """This is a dashboard-presentation change and nothing else."""
@@ -1862,13 +1880,29 @@ class TestNoBackendFileWasTouched:
         changed = _changed_paths()
         if changed is None:
             pytest.skip("not a git checkout")
+        allowed = {**_MIGRATION_EXCEPTIONS, **_DISCLOSURE_EXCEPTIONS}
         offenders = [
             path
             for path in changed
             if any(path.startswith(prefix) for prefix in _PROTECTED_PREFIXES)
-            and path not in _MIGRATION_EXCEPTIONS
+            and path not in allowed
         ]
         assert not offenders, f"protected files modified: {sorted(offenders)}"
+
+    def test_the_disclosure_exceptions_are_only_disclosure_text(self):
+        """The backend files exempted above must carry the disclosure, and only that.
+
+        Without this, ``_DISCLOSURE_EXCEPTIONS`` would be a standing licence to
+        change the API and model-card modules unnoticed.  Each exempted file has
+        to actually contain the scientific disclosure it was exempted for.
+        """
+        required = ("algorithmically generated", "circular supervision")
+        for path in _DISCLOSURE_EXCEPTIONS:
+            text = (_PROJECT_ROOT / path).read_text(encoding="utf-8").lower()
+            for phrase in required:
+                assert phrase in text, (
+                    f"{path} is exempted for scientific disclosure but does not contain {phrase!r}"
+                )
 
     def test_the_release_workflow_exception_is_only_the_page_glob(self):
         """The one allowed deployment edit must be exactly what it claims.

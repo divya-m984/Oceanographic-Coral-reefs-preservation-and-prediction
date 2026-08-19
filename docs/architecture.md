@@ -191,8 +191,34 @@ These require trained observer survey or photogrammetry:
 - **CV macro-F1:** 0.7913 | **Test macro-F1:** 0.8029
 - **Test balanced accuracy:** 0.8121
 
-All metrics are on the synthetic dataset and must not be
+### 3.3 Scientific interpretation of these metrics
+
+All metrics above are on the **synthetic prototype dataset** and must not be
 interpreted as evidence of real-world coral reef prediction accuracy.
+
+Both targets carry **label-construction leakage / circular supervision**: the
+label columns are **algorithmically generated** by weighted formulas over other
+columns in the same file, and those generating columns are then supplied to the
+models as predictors. `get_feature_columns()` correctly excludes each target from
+the other task's feature set, so the target column itself is never an input — but
+the variables that construct it are. Three engineered features
+(`thermal_stress_index`, `oxygen_stress_index`, `water_quality_index`) additionally
+reproduce components of the health-score formula exactly, which is **engineered
+proxy leakage**.
+
+**Audit diagnostic.** Re-computing the generator's scoring formula in closed form,
+with its Gaussian noise term removed and no machine learning at all, reproduces the
+stored labels at macro-F1 ≈ 0.770 (reef health) and ≈ 0.812 (restoration) —
+matching or exceeding an equivalent trained model (≈ 0.760 / ≈ 0.791). These four
+values are **audit diagnostics**, not registered model metrics; the canonical
+champion figures are the ones listed in 3.1 and 3.2.
+
+The consequence: these models demonstrate **recovery of synthetic generation rules
+and correct MLOps pipeline behaviour** — **not validated real-world coral-reef
+prediction accuracy**. There is **no independent biological ground truth** in this
+project and no external validation has been performed.
+
+Full analysis: [`audits/dataset_scientific_audit_2026-08-19.md`](audits/dataset_scientific_audit_2026-08-19.md).
 
 ---
 

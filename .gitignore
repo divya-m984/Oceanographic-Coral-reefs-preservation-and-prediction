@@ -58,6 +58,12 @@ data/processed/
 data/reference/*.csv
 data/production/*.csv
 
+# Local research material staged for audit — never committed.
+# Holds third-party literature and externally licensed datasets (e.g. IUCN Red
+# List spatial data, whose terms prohibit redistribution). See
+# docs/audits/dataset_scientific_audit_2026-08-19.md sections 15 and 21.
+data/audit_inbox/
+
 # Model artifacts (tracked by DVC / MLflow)
 models/*.pkl
 models/*.joblib
