@@ -108,6 +108,28 @@ All three algorithms (Logistic Regression, Random Forest, XGBoost) were
 trained and evaluated. Selection was by 5-fold cross-validation macro-F1 on
 the training set. Test metrics were computed on a held-out 20% split.
 
+**Scientific disclosure — what these metrics do and do not show:**
+
+Every figure above was measured on the **synthetic prototype dataset**. Both
+targets carry **label-construction leakage / circular supervision**: the labels
+are **algorithmically generated** by weighted formulas over other columns in the
+same file, and those generating columns are then supplied to the models as
+predictors. Several engineered features reproduce components of the
+label-generating formula exactly (**engineered proxy leakage**).
+
+An audit diagnostic makes the scale of this concrete: a closed-form
+re-computation of the generator's own formula, with its noise term removed and
+no machine learning at all, reproduces the stored labels at macro-F1 ≈ 0.770
+(health) and ≈ 0.812 (restoration) — matching or exceeding an equivalent trained
+model (≈ 0.760 / ≈ 0.791). Those are **audit diagnostics**, not registered model
+metrics; the canonical champion figures are the ones listed above.
+
+These results therefore demonstrate **recovery of synthetic generation rules and
+correct MLOps pipeline behaviour, not validated real-world ecological
+prediction**. There is **no independent biological ground truth** in this project
+and the models have not been externally validated. The full analysis is in
+[`audits/dataset_scientific_audit_2026-08-19.md`](audits/dataset_scientific_audit_2026-08-19.md).
+
 ### MLOps component
 
 - DVC tracks data and model lineage across all pipeline stages.

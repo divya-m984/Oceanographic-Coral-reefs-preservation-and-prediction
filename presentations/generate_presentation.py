@@ -1001,7 +1001,9 @@ def slide_01_title(prs):
         top=Inches(6.35),
         width=Inches(12.5),
         height=Inches(0.42),
-        text="All observations in this prototype are synthetic. Models do not represent real-world conservation accuracy.",
+        text="All observations in this prototype are synthetic and both target labels are "
+        "algorithmically generated from variables also supplied as predictors. Models do not "
+        "represent real-world conservation accuracy.",
         size=Pt(9.5),
         italic=True,
         color=RGBColor(0x7A, 0xA4, 0xB8),
@@ -2360,8 +2362,10 @@ def slide_09_health_results(prs):
         top=Inches(6.92),
         width=Inches(12.65),
         height=Inches(0.26),
-        text="SYNTHETIC DATA DISCLAIMER: These metrics reflect performance on synthetic observations only. "
-        "They do not indicate real-world coral reef prediction accuracy.",
+        text="SYNTHETIC DATA DISCLAIMER: Metrics are from a synthetic prototype dataset whose "
+        "labels are algorithmically generated from variables also supplied as predictors "
+        "(label-construction leakage / circular supervision). They measure recovery of synthetic "
+        "generation rules, not real-world coral reef prediction accuracy.",
         size=Pt(9.5),
         italic=True,
         color=C_AMBER,
@@ -2520,8 +2524,10 @@ def slide_10_restoration_results(prs):
         top=Inches(6.92),
         width=Inches(12.65),
         height=Inches(0.26),
-        text="SYNTHETIC DATA DISCLAIMER: These metrics reflect performance on synthetic observations only. "
-        "They do not indicate real-world coral reef prediction accuracy.",
+        text="SYNTHETIC DATA DISCLAIMER: Metrics are from a synthetic prototype dataset whose "
+        "labels are algorithmically generated from variables also supplied as predictors "
+        "(label-construction leakage / circular supervision). They measure recovery of synthetic "
+        "generation rules, not real-world coral reef prediction accuracy.",
         size=Pt(9.5),
         italic=True,
         color=C_AMBER,

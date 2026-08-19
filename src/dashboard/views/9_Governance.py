@@ -79,8 +79,13 @@ theme.page_header(
     eyebrow="Accountability",
 )
 st.warning(
-    "**Synthetic-data disclaimer:** All models were trained on a computer-generated "
-    "synthetic dataset. Metrics do not indicate real-world coral reef prediction accuracy.",
+    "**Synthetic-data disclaimer:** All models were trained on a **synthetic prototype "
+    "dataset** whose labels are **algorithmically generated** from variables that are "
+    "themselves supplied to the models as predictors (**label-construction leakage / "
+    "circular supervision**). Metrics demonstrate recovery of synthetic structure and "
+    "MLOps pipeline behaviour, **not** real-world coral reef prediction accuracy. No "
+    "independent biological ground truth exists in this project and no external "
+    "validation has been performed.",
     icon="⚠️",
 )
 
@@ -273,12 +278,45 @@ A rollback receipt is always written to `reports/rollback_receipt_<timestamp>.js
 ### Synthetic-data limitation
 
 All model versions currently registered in this project were trained on
-the synthetic dataset. Metrics do not generalise to real coral
-reef environments. Before any real-world deployment:
+the synthetic prototype dataset. Metrics do not generalise to real coral
+reef environments.
+
+### Label-construction leakage / circular supervision
+
+The limitation is stronger than "the data is synthetic". Both targets are
+**algorithmically generated**: `src/data/generate_data.py` computes a weighted
+score over other columns in the same file, adds Gaussian noise, and thresholds
+the result. Those same generating columns are then supplied to the models as
+predictors.
+
+Each target column is correctly excluded from the other task's feature matrix,
+so this is **not** ordinary direct target leakage — it is
+**label-construction leakage**. Three engineered features
+(`thermal_stress_index`, `oxygen_stress_index`, `water_quality_index`)
+additionally reproduce components of the health-score formula exactly, which is
+**engineered proxy leakage**.
+
+**Audit diagnostic.** A closed-form re-computation of the generator's formula,
+with its noise term removed and no machine learning at all, reproduces the
+stored labels at macro-F1 ≈ 0.770 (health) and ≈ 0.812 (restoration) —
+matching or exceeding an equivalent trained model (≈ 0.760 / ≈ 0.791). These are
+**audit diagnostics**, not registered model metrics, and they do not replace the
+champion figures shown above.
+
+Consequence: registered metrics are evidence of a correctly functioning ML and
+MLOps pipeline and are valid for relative algorithm comparison. They are **not**
+evidence of ecological validity. Full analysis:
+`docs/audits/dataset_scientific_audit_2026-08-19.md`.
+
+### Before any real-world deployment
 
 1. Replace the synthetic generator with a real sensor ingestion module.
 2. Commission ecological surveys to produce genuinely labelled ground truth.
-3. Obtain domain expert sign-off before using predictions to guide any
+3. Re-specify both targets so the label is not constructed from variables that
+   are also supplied as predictors.
+4. Validate against an independent real dataset — no internal split can validate
+   a model whose labels were authored by the same script as its features.
+5. Obtain domain expert sign-off before using predictions to guide any
    conservation management decision.
 """
 )

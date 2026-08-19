@@ -137,9 +137,56 @@ Gaussian noise (σ = noise_scale × 0.45) is added before thresholding.
 
 | Score range | Class |
 |---|---|
-| r < 0.35 | unsuitable |
-| 0.35 ≤ r < 0.63 | moderately_suitable |
+| r < 0.40 | unsuitable |
+| 0.40 ≤ r < 0.63 | moderately_suitable |
 | r ≥ 0.63 | suitable |
+
+Thresholds above match `_RESTORATION_THRESHOLDS = (0.40, 0.63)` in
+`src/data/generate_data.py`.
+
+---
+
+## Label-construction leakage / circular supervision
+
+Neither `reef_health` nor `restoration_suitability` is an observed reef state.
+Both are **algorithmically generated** labels: the scoring formulas above are
+evaluated over other columns in the same file, Gaussian noise is added, and fixed
+thresholds are applied.
+
+Read those two scoring tables alongside the feature list: **every variable that
+constructs a label is also supplied to the models as a predictor.**
+
+| | Variables that construct the label | Also used as model features? |
+|---|---|---|
+| `reef_health` | `water_temperature_c`, `ph`, `dissolved_oxygen_mg_l`, `turbidity_ntu`, `bleaching_percentage`, `disease_percentage`, `coral_cover_percentage` | **Yes — all seven** |
+| `restoration_suitability` | `water_temperature_c`, `ph`, `light_intensity`, `hard_substrate_percentage`, `current_speed_m_s`, `turbidity_ntu`, `depth_m`, `coral_cover_percentage` | **Yes — all eight** |
+
+`get_feature_columns()` correctly excludes each target column from the other
+task's feature matrix, so this is **not** ordinary direct target leakage. It is
+**label-construction leakage / circular supervision**: the label is a
+deterministic-plus-noise function of the predictors, so a model can recover it by
+inverting arithmetic rather than by learning an ecological relationship.
+
+Three derived features in `src/features/build_features.py` compound this by
+reproducing components of the health score exactly — same constants, same
+clipping (**engineered proxy leakage**):
+
+| Derived feature | Reproduces |
+|---|---|
+| `thermal_stress_index` | the thermal-stress component (weight 0.20) |
+| `oxygen_stress_index` | the DO-stress component (weight 0.08) |
+| `water_quality_index` | a re-weighted composite of four scoring components (combined weight 0.50) |
+
+**Audit diagnostic.** Re-computing the health and restoration formulas in closed
+form, with the Gaussian noise term removed and no machine learning at all,
+reproduces the stored labels at macro-F1 ≈ 0.770 and ≈ 0.812 respectively —
+matching or exceeding an equivalent trained model (≈ 0.760 / ≈ 0.791). These are
+**audit diagnostics**, not registered model metrics.
+
+Consequence: metrics on this dataset demonstrate **recovery of the synthetic
+generation rules and correct MLOps pipeline behaviour, not real-world ecological
+validity**. There is **no independent biological ground truth** in this dataset.
+Full analysis: [`audits/dataset_scientific_audit_2026-08-19.md`](audits/dataset_scientific_audit_2026-08-19.md).
 
 ---
 

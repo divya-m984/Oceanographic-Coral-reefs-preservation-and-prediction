@@ -6,7 +6,13 @@ models/evaluation_restoration.json) to display model comparison tables and
 per-class performance metrics.
 
 No models are loaded, trained or registered by this page.
-All metrics are from synthetic data.
+
+All metrics are from the synthetic prototype dataset, whose labels are
+algorithmically generated from variables that are also supplied to the models
+as predictors (label-construction leakage / circular supervision). They measure
+recovery of synthetic structure, not real-world ecological validity. The
+"Scientific interpretation" expander on this page documents that finding; see
+docs/audits/dataset_scientific_audit_2026-08-19.md for the full analysis.
 """
 
 from __future__ import annotations
@@ -34,10 +40,93 @@ theme.page_header(
     "The champion model is selected by cross-validated macro F1.",
     eyebrow="Evaluation",
 )
-st.info(
-    "All metrics are computed on **synthetic data** generated for this project. "
-    "They do not represent real-world predictive performance on actual reef surveys."
+st.warning(
+    "**Scientific disclosure.** These metrics were measured on a **synthetic prototype "
+    "dataset** whose labels are **algorithmically generated** from variables that are "
+    "themselves supplied to the models as predictors (**label-construction leakage / "
+    "circular supervision**). They measure recovery of the synthetic generation rules "
+    "and MLOps pipeline behaviour, **not validated real-world coral-reef prediction "
+    "accuracy**. There is no independent biological ground truth in this project and "
+    "these models have not been externally validated.",
+    icon="⚠️",
 )
+
+with st.expander("Scientific interpretation — why these scores are high", expanded=False):
+    st.markdown(
+        """
+        The champion metrics on this page are **canonical**: they come from the held-out
+        test split and the MLflow registry, and they are the correct figures to quote for
+        this project. What follows explains what they actually measure.
+
+        #### Label-construction leakage / circular supervision
+
+        `reef_health` and `restoration_suitability` are not observed reef states. Both are
+        **algorithmically generated** by `src/data/generate_data.py`, which computes a
+        weighted score over other columns in the same file, adds Gaussian noise, and
+        applies fixed thresholds:
+
+        - **reef health** — a weighted sum of `bleaching_percentage` (0.25),
+          `water_temperature_c` (0.20), `coral_cover_percentage` (0.13),
+          `disease_percentage` (0.12), `ph` (0.12), `turbidity_ntu` (0.10) and
+          `dissolved_oxygen_mg_l` (0.08)
+        - **restoration suitability** — a weighted sum of `hard_substrate_percentage`
+          (0.22), `water_temperature_c` (0.15), `ph` (0.12), `turbidity_ntu` (0.12),
+          `light_intensity` (0.10), `current_speed_m_s` (0.10),
+          `coral_cover_percentage` (0.10) and `depth_m` (0.09)
+
+        Each target column is correctly kept out of the other task's feature matrix, so
+        this is **not** ordinary direct target leakage. The problem is that the variables
+        which *construct* the label are supplied to the model as predictors. The model is
+        therefore inverting a formula rather than learning an ecological relationship.
+
+        #### Engineered proxy leakage
+
+        Three derived features reproduce components of the health-score formula exactly —
+        same constants, same clipping: `thermal_stress_index`, `oxygen_stress_index`, and
+        `water_quality_index` (a composite of four scoring components).
+
+        #### Audit diagnostic — the closed-form comparison
+
+        Re-computing the generator's own scoring formula in closed form, with its Gaussian
+        noise term removed and **no machine learning of any kind**, reproduces the stored
+        labels as well as a trained model does:
+        """
+    )
+    st.dataframe(
+        pd.DataFrame(
+            {
+                "Approach": [
+                    "Closed-form generator formula (no ML)",
+                    "Learned model, all 21 features, 5-fold CV",
+                ],
+                "reef_health macro-F1": ["≈ 0.770", "≈ 0.760"],
+                "restoration macro-F1": ["≈ 0.812", "≈ 0.791"],
+            }
+        ),
+        hide_index=True,
+        use_container_width=True,
+    )
+    st.markdown(
+        """
+        Arithmetic matches or beats the model. That is the signature of circular
+        supervision: performance is capped by the noise the generator injected, and the
+        model has converged on the generation rules.
+
+        > **These two rows are an audit diagnostic only.** They were produced by an ad-hoc
+        > cross-validated model built for the leakage investigation. They are **not**
+        > registered model metrics and do **not** replace the champion figures shown
+        > elsewhere on this page.
+
+        #### What this means
+
+        These metrics are valid evidence of a correctly functioning ML and MLOps pipeline,
+        and valid for comparing algorithms against one another. They are **not** evidence
+        that this system can assess a real reef, and must not inform any conservation or
+        policy decision.
+
+        Full analysis: `docs/audits/dataset_scientific_audit_2026-08-19.md`.
+        """
+    )
 
 # ---------------------------------------------------------------------------
 # Why macro F1?
@@ -280,7 +369,9 @@ def _render_task(task: str, champion_name: str, class_colors: dict[str, str]) ->
     st.caption(
         f"Selection: {champion_display} selected by CV macro F1 = "
         f"{champion_metrics.get('cv_macro_f1_mean', 0):.4f}. "
-        "All metrics on synthetic data."
+        "All metrics on the synthetic prototype dataset with algorithmically generated "
+        "labels — they reflect recovery of synthetic structure, not real-world "
+        "ecological validity."
     )
 
 
