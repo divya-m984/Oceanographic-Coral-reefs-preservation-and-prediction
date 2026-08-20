@@ -1872,6 +1872,30 @@ _DISCLOSURE_EXCEPTIONS: dict[str, str] = {
     "src/models/model_card.py": "_SYNTHETIC_DISCLAIMER and Limitations section",
 }
 
+#: The real external-data layer, which is new and structurally isolated.
+#:
+#: ``data/`` is a protected prefix because the synthetic benchmark and its
+#: derived artefacts live there.  ``data/external/`` is a new sibling holding
+#: real (non-synthetic) data and its provenance; it adds files rather than
+#: altering any existing one, and nothing in it reads or writes the synthetic
+#: dataset.
+#:
+#: ``test_the_external_data_exception_cannot_cover_synthetic_paths`` pins that
+#: this exception can never be widened to the synthetic data directories.
+_EXTERNAL_DATA_EXCEPTIONS: dict[str, str] = {
+    "data/external/": "real external-data layer: provenance metadata (raw/ is git-ignored)",
+}
+
+#: Synthetic-pipeline data paths that no exception may ever cover.
+_NEVER_EXEMPT_PREFIXES: tuple[str, ...] = (
+    "data/raw/",
+    "data/processed/",
+    "data/reference/",
+    "data/production/",
+    "models/",
+    "artifacts/",
+)
+
 
 class TestNoBackendFileWasTouched:
     """This is a dashboard-presentation change and nothing else."""
@@ -1880,14 +1904,40 @@ class TestNoBackendFileWasTouched:
         changed = _changed_paths()
         if changed is None:
             pytest.skip("not a git checkout")
-        allowed = {**_MIGRATION_EXCEPTIONS, **_DISCLOSURE_EXCEPTIONS}
+        allowed = {**_MIGRATION_EXCEPTIONS, **_DISCLOSURE_EXCEPTIONS, **_EXTERNAL_DATA_EXCEPTIONS}
         offenders = [
             path
             for path in changed
             if any(path.startswith(prefix) for prefix in _PROTECTED_PREFIXES)
             and path not in allowed
+            and not any(path.startswith(prefix) for prefix in _EXTERNAL_DATA_EXCEPTIONS)
         ]
         assert not offenders, f"protected files modified: {sorted(offenders)}"
+
+    def test_the_external_data_exception_cannot_cover_synthetic_paths(self):
+        """The external-data exemption must never reach the synthetic pipeline.
+
+        Without this, ``_EXTERNAL_DATA_EXCEPTIONS`` could be widened to
+        ``data/`` and silently un-protect the frozen synthetic benchmark, the
+        preprocessors, and the model artefacts.
+        """
+        for exempt in _EXTERNAL_DATA_EXCEPTIONS:
+            assert exempt.startswith("data/external/"), (
+                f"external-data exemption {exempt!r} reaches outside data/external/"
+            )
+            for never in _NEVER_EXEMPT_PREFIXES:
+                assert not exempt.startswith(never), f"{exempt!r} would exempt {never!r}"
+                assert not never.startswith(exempt), f"{exempt!r} would exempt {never!r}"
+
+    def test_raw_external_data_is_not_committable(self):
+        """The exemption covers provenance metadata, not bulk raw data."""
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", "data/external/raw/"],
+            cwd=_PROJECT_ROOT,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0, "data/external/raw/ must stay git-ignored"
 
     def test_the_disclosure_exceptions_are_only_disclosure_text(self):
         """The backend files exempted above must carry the disclosure, and only that.

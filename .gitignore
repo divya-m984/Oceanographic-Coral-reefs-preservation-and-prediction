@@ -58,6 +58,13 @@ data/processed/
 data/reference/*.csv
 data/production/*.csv
 
+# Raw external scientific data (real, non-synthetic). Metadata under
+# data/external/metadata/ IS tracked; the raw files are not, so this layer can
+# later be placed under DVC without rewriting Git history. Ignoring raw/ is a
+# storage decision, not a licensing one — per-product redistribution terms are
+# recorded in each manifest's `redistribution_allowed` field.
+data/external/raw/
+
 # Local research material staged for audit — never committed.
 # Holds third-party literature and externally licensed datasets (e.g. IUCN Red
 # List spatial data, whose terms prohibit redistribution). See
