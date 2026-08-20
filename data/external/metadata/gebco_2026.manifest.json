@@ -1,0 +1,248 @@
+{
+  "schema": "coralsense.external.manifest/v1",
+  "dataset_id": "gebco_2026",
+  "source": {
+    "dataset_id": "gebco_2026",
+    "source_name": "GEBCO / Nippon Foundation-GEBCO Seabed 2030 Project",
+    "product_name": "The GEBCO_2026 Grid - a continuous terrain model for oceans and land at 15 arc-second intervals",
+    "source_url": "https://www.gebco.net/data-products-gridded-bathymetry-data/gebco2026-grid",
+    "version": "GEBCO_2026",
+    "licence_name": "Public domain (GEBCO Grid terms of use)",
+    "licence_url": "https://www.gebco.net/",
+    "citation": "GEBCO Bathymetric Compilation Group 2026 (2026). The GEBCO_2026 Grid - a continuous terrain model of the global oceans and land. NERC EDS British Oceanographic Data Centre NOC. doi:10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa",
+    "observation_type": "compiled",
+    "processing_level": "L4",
+    "original_format": "NetCDF-3 classic (subset via THREDDS NCSS from a NetCDF-4 source)",
+    "original_crs": "EPSG:4326 (WGS 84 geographic)",
+    "spatial_resolution": "15 arc-seconds (~0.00416667 deg, ~450 m at the equator)",
+    "temporal_resolution": "static (single 2026 compilation; annual product releases)",
+    "geographic_scope": "Source product is global (-180/180, -90/90). Four regional subsets acquired: Lakshadweep, Gulf of Mannar, Gulf of Kutch, Andaman and Nicobar Islands.",
+    "temporal_scope": "Compilation published 2026-04-17; represents no single observation epoch",
+    "retrieved_at_utc": "2026-08-19T15:58:46Z",
+    "access_method": "THREDDS NetCDF Subset Service (NCSS) at https://dap.ceda.ac.uk/thredds/ncss/grid/bodc/gebco/global/gebco_2026/ice_surface_elevation/netcdf/GEBCO_2026.nc ; grid metadata cross-checked via OPeNDAP at https://dap.ceda.ac.uk/thredds/dodsC/bodc/gebco/global/gebco_2026/ice_surface_elevation/netcdf/GEBCO_2026.nc",
+    "doi": "10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa",
+    "sensor_type": "Composite: multibeam and singlebeam echosounder soundings, satellite-derived predicted bathymetry (SRTM15+ v2.8 base), and land topography",
+    "vertical_crs": "EPSG:5831 (instantaneous water level, positive up)",
+    "licence_verified": true,
+    "licence_verified_via": "Verified 2026-08-19 from two authoritative places: the official GEBCO_2026 product page, and the 'license' global attribute carried inside the delivered NetCDF itself - 'The GEBCO Grid is placed in the public domain and may be used free of charge.'",
+    "redistribution_allowed": true,
+    "raw_tracked_in_git": false,
+    "is_synthetic": false,
+    "provides_variables": [
+      "elevation_m",
+      "depth_m (derived, marine cells only)"
+    ],
+    "cannot_provide": [
+      "coral_cover_percentage",
+      "bleaching_percentage",
+      "disease_percentage",
+      "reef_health",
+      "restoration_suitability",
+      "sonar_backscatter",
+      "acoustic_complexity_index",
+      "rugosity_index (at the project's intended fine scale)"
+    ],
+    "disclaimer": "GEBCO states the grid must not be used for navigation or any purpose relating to safety at sea. At ~450 m the grid is far too coarse to reproduce the synthetic fine-scale rugosity_index; any future terrain-roughness feature must carry a new, resolution-aware definition.",
+    "notes": "Acquired as an isolated real bathymetric reference. Not joined to the synthetic prototype dataset, not used for modelling, and carries no labels. Raw files are kept out of Git (see data/external/raw/.gitignore) so this layer can later be placed under DVC without rewriting history; redistribution is nevertheless permitted because the product is public domain."
+  },
+  "subsets": [
+    {
+      "dataset_id": "gebco_2026",
+      "region": "Lakshadweep",
+      "local_file": "data/external/raw/gebco_2026/gebco_2026_lakshadweep.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 1453404,
+      "sha256": "d48c9453f049d72e9572b418bf38fc5b123afa2f493f620a7d2d796440eb6cc5",
+      "retrieved_at_utc": "2026-08-19T15:58:46Z",
+      "request_url": "https://dap.ceda.ac.uk/thredds/ncss/grid/bodc/gebco/global/gebco_2026/ice_surface_elevation/netcdf/GEBCO_2026.nc?var=elevation&north=12.6&south=8.0&west=71.5&east=74.2&horizStride=1&accept=netcdf",
+      "requested_bbox": [
+        8.0,
+        12.6,
+        71.5,
+        74.2
+      ],
+      "actual_bbox": [
+        8.002083333333331,
+        12.602083333333326,
+        71.50208333333333,
+        74.20208333333332
+      ],
+      "dimensions": {
+        "lat": 1105,
+        "lon": 649
+      },
+      "grid_spacing_deg": 0.004166666667,
+      "elevation_units": "m",
+      "min_elevation_m": -3893.0,
+      "max_elevation_m": 386.0,
+      "median_elevation_m": -2000.0,
+      "marine_cell_count": 716233,
+      "land_cell_count": 912,
+      "nodata_count": 0,
+      "bbox_rationale": "Archipelago spans roughly 8-12 deg 13' N, 71-74 deg E. The southern bound of 8.0 deliberately includes Minicoy (8 deg 15'-8 deg 20' N, 73 deg 01'-73 deg 05' E), which the earlier synthetic box [10.0, 12.5, 72.0, 74.0] excluded entirely. The northern and western bounds cover Cherbaniani Reef (12 deg 18' N, 71 deg 53' E), the north-westernmost feature. Margin ~0.3 deg on each side for surrounding water.",
+      "is_synthetic": false
+    },
+    {
+      "dataset_id": "gebco_2026",
+      "region": "Gulf of Mannar",
+      "local_file": "data/external/raw/gebco_2026/gebco_2026_gulf_of_mannar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 195660,
+      "sha256": "3b2d067b88a7f2764b645be1d9a531646e9119bdc086528c68cc2d0442662093",
+      "retrieved_at_utc": "2026-08-19T15:58:46Z",
+      "request_url": "https://dap.ceda.ac.uk/thredds/ncss/grid/bodc/gebco/global/gebco_2026/ice_surface_elevation/netcdf/GEBCO_2026.nc?var=elevation&north=9.5&south=8.5&west=78.0&east=79.6&horizStride=1&accept=netcdf",
+      "requested_bbox": [
+        8.5,
+        9.5,
+        78.0,
+        79.6
+      ],
+      "actual_bbox": [
+        8.502083333333331,
+        9.502083333333331,
+        78.0020833333333,
+        79.60208333333333
+      ],
+      "dimensions": {
+        "lat": 241,
+        "lon": 385
+      },
+      "grid_spacing_deg": 0.004166666667,
+      "elevation_units": "m",
+      "min_elevation_m": -1439.0,
+      "max_elevation_m": 104.0,
+      "median_elevation_m": -13.0,
+      "marine_cell_count": 66046,
+      "land_cell_count": 26739,
+      "nodata_count": 0,
+      "bbox_rationale": "The Gulf runs 8 deg 35' N-9 deg 25' N and 78 deg 08' E-79 deg 30' E; the 21-island chain lies 1-10 km offshore over the 160 km between Tuticorin and Dhanushkodi, with the marine national park at 9.1375 N, 79.4725 E. Northern bound held at 9.5 to exclude Palk Bay, which is a distinct system that should be acquired separately if needed. The earlier synthetic box [8.5, 10.5, 78.0, 80.5] reached inland Tamil Nadu and across the strait toward Sri Lanka.",
+      "is_synthetic": false
+    },
+    {
+      "dataset_id": "gebco_2026",
+      "region": "Gulf of Kutch",
+      "local_file": "data/external/raw/gebco_2026/gebco_2026_gulf_of_kutch.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 207420,
+      "sha256": "ad842f3699f595fe4914f6f85412743a4383cf1f262bb0204f21eee1debdbcfa",
+      "retrieved_at_utc": "2026-08-19T15:58:46Z",
+      "request_url": "https://dap.ceda.ac.uk/thredds/ncss/grid/bodc/gebco/global/gebco_2026/ice_surface_elevation/netcdf/GEBCO_2026.nc?var=elevation&north=23.0&south=22.0&west=68.9&east=70.6&horizStride=1&accept=netcdf",
+      "requested_bbox": [
+        22.0,
+        23.0,
+        68.9,
+        70.6
+      ],
+      "actual_bbox": [
+        22.00208333333333,
+        23.00208333333333,
+        68.90208333333334,
+        70.60208333333333
+      ],
+      "dimensions": {
+        "lat": 241,
+        "lon": 409
+      },
+      "grid_spacing_deg": 0.004166666667,
+      "elevation_units": "m",
+      "min_elevation_m": -90.0,
+      "max_elevation_m": 260.0,
+      "median_elevation_m": 10.0,
+      "marine_cell_count": 36727,
+      "land_cell_count": 61842,
+      "nodata_count": 0,
+      "bbox_rationale": "Marine National Park and Sanctuary centred at 22.467 N, 69.617 E, comprising 42 islands along the Jamnagar coast with reefs bordering 33 of them over ~170 km. The earlier synthetic box [22.0, 24.5, 68.0, 71.0] extended to 24.5 N, roughly 170 km inland into mainland Gujarat; the northern bound is cut to 23.0 accordingly.",
+      "is_synthetic": false
+    },
+    {
+      "dataset_id": "gebco_2026",
+      "region": "Andaman and Nicobar Islands",
+      "local_file": "data/external/raw/gebco_2026/gebco_2026_andaman_nicobar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 2015820,
+      "sha256": "7fcbe27ded04dcbdb7bb4f83703a70c0372e6f1ff8443af89c221d8569d0db77",
+      "retrieved_at_utc": "2026-08-19T15:58:46Z",
+      "request_url": "https://dap.ceda.ac.uk/thredds/ncss/grid/bodc/gebco/global/gebco_2026/ice_surface_elevation/netcdf/GEBCO_2026.nc?var=elevation&north=14.0&south=6.5&west=92.0&east=94.3&horizStride=1&accept=netcdf",
+      "requested_bbox": [
+        6.5,
+        14.0,
+        92.0,
+        94.3
+      ],
+      "actual_bbox": [
+        6.502083333333331,
+        14.002083333333331,
+        92.0020833333333,
+        94.30208333333331
+      ],
+      "dimensions": {
+        "lat": 1801,
+        "lon": 553
+      },
+      "grid_spacing_deg": 0.004166666667,
+      "elevation_units": "m",
+      "min_elevation_m": -4724.0,
+      "max_elevation_m": 679.0,
+      "median_elevation_m": -1318.0,
+      "marine_cell_count": 961920,
+      "land_cell_count": 34033,
+      "nodata_count": 0,
+      "bbox_rationale": "Territory spans 6-14 deg N, 92-94 deg E, from Landfall Island (13 deg 39' N, 93 deg 00' E) to Indira Point (6 deg 45' 10\" N, 93 deg 49' 36\" E). The eastern bound is widened to 94.3 so Indira Point and the outer eastern reefs are not clipped. This window is intrinsically large and mostly open water; it is an acquisition extent only and must be reduced to reef polygons before any modelling use.",
+      "is_synthetic": false
+    }
+  ],
+  "checksum_semantics": {
+    "algorithm": "SHA-256",
+    "scope": "Hash of the regional subset file as retrieved by this project, computed locally at acquisition time.",
+    "is_publisher_canonical_checksum": false,
+    "guarantees": "The local file has not been altered since acquisition.",
+    "does_not_guarantee": "That re-requesting the same logical subset reproduces identical bytes. Server-side subsetting may return a byte-different NetCDF serialisation (library version, chunking, attribute order, generation timestamp) while encoding equivalent grid values. A mismatch after re-fetch means 'different bytes', not necessarily 'different data'.",
+    "authoritative_identity": "Scientific identity of the source product is pinned by version GEBCO_2026 and DOI 10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa, not by these file hashes."
+  },
+  "bathymetric_context": {
+    "note": "Depth-band percentages describe bathymetry only. Shallow water is NOT a reef label and must never be treated as one.",
+    "convention": "negative elevation = below mean sea level; depth_m = -elevation",
+    "regions": {
+      "lakshadweep": {
+        "label": "Lakshadweep",
+        "percent_marine": 99.873,
+        "depth_bands_percent_of_marine": {
+          "0_10m": 0.465,
+          "10_30m": 0.536,
+          "30_100m": 0.244,
+          "gt_100m": 98.756
+        }
+      },
+      "gulf_of_mannar": {
+        "label": "Gulf of Mannar",
+        "percent_marine": 71.182,
+        "depth_bands_percent_of_marine": {
+          "0_10m": 23.255,
+          "10_30m": 27.699,
+          "30_100m": 8.15,
+          "gt_100m": 40.896
+        }
+      },
+      "gulf_of_kutch": {
+        "label": "Gulf of Kutch",
+        "percent_marine": 37.26,
+        "depth_bands_percent_of_marine": {
+          "0_10m": 37.482,
+          "10_30m": 37.681,
+          "30_100m": 24.837,
+          "gt_100m": 0.0
+        }
+      },
+      "andaman_nicobar": {
+        "label": "Andaman and Nicobar Islands",
+        "percent_marine": 96.583,
+        "depth_bands_percent_of_marine": {
+          "0_10m": 1.422,
+          "10_30m": 3.687,
+          "30_100m": 7.778,
+          "gt_100m": 87.113
+        }
+      }
+    }
+  }
+}
