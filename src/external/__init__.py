@@ -26,6 +26,8 @@ Contents
 from __future__ import annotations
 
 from src.external.provenance import (
+    FORBIDDEN_BIOLOGICAL_CLAIMS,
+    FORBIDDEN_TARGET_CLAIMS,
     LicenceGateError,
     ProvenanceError,
     SourceRecord,
@@ -39,6 +41,8 @@ from src.external.provenance import (
 )
 
 __all__ = [
+    "FORBIDDEN_BIOLOGICAL_CLAIMS",
+    "FORBIDDEN_TARGET_CLAIMS",
     "LicenceGateError",
     "ProvenanceError",
     "SourceRecord",

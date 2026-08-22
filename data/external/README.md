@@ -31,6 +31,49 @@ terms are recorded per product in its manifest.
 | Product | Version | Licence | Redistribution | Manifest |
 |---|---|---|---|---|
 | GEBCO Grid | `GEBCO_2026` | Public domain (verified) | Allowed | `metadata/gebco_2026.manifest.json` |
+| NOAA Coral Reef Watch 5 km | `v3.1` | US Government public domain, attribution requested (verified) | Allowed | `metadata/noaa_crw_5km_v3_1.manifest.json` |
+
+Both cover the same four Indian reef systems — Lakshadweep, Gulf of Mannar, Gulf
+of Kutch, Andaman and Nicobar Islands — over identical acquisition windows.
+**They are not joined to each other.**
+
+| | GEBCO_2026 | NOAA CRW 5 km v3.1 |
+|---|---|---|
+| Quantity | Bathymetry / terrain | Thermal: SST, SST anomaly, HotSpot, DHW |
+| Resolution | 15″ (~450 m) | 0.05° (~5 km) |
+| Time | Static compilation | Daily, 2018-01-01 → 2024-12-31 |
+| Files | 4 | 16 (4 variables × 4 regions) |
+
+### CRW licence caveat
+
+**Licence basis.** `licence_verified` and `redistribution_allowed` rest on NOAA
+CRW's published terms (posted data are freely available, website content is
+public domain and may be distributed freely) plus the licence metadata delivered
+inside the files. They are **not inferred from** the acquisition window's
+position in CoralTemp's source lineage.
+
+**Source lineage**, tracked separately. CoralTemp is assembled from more than one
+analysis: Met Office OSTIA reanalysis contributes directly from January 1985 to
+November 2002, then NOAA Geo-Polar Blended reprocessed to October 2016, then
+operational Geo-Polar — with 29-day linear merges over November 1–29, 2002 and
+October 1–29, 2016. Only the OSTIA reanalysis is restrictively licensed
+(academic use only, reproduction licence application required).
+
+OSTIA does **not** drop out later: NOAA states the Geo-Polar Blended product
+"switched to using OSTIA as the bias correction" in 2016, which covers the
+acquired window. **No part of this dataset is "OSTIA-free."**
+
+`scripts/fetch_noaa_crw.py` refuses to request anything before
+`FIRST_POST_OSTIA_BLEND_REQUEST_DATE = "2002-12-01"`. That is a **conservative
+project policy** — stay out of the direct-OSTIA period and the 2002 merge window
+— not a NOAA licence boundary and not a purity claim. The acquired window starts
+2018-01-01, well past it.
+
+### CRW products are not labels
+
+`DHW ≠ bleaching_percentage`. `HotSpot ≠ bleaching_percentage`. These are
+thermal-stress **predictors**; thresholding them into a reef-condition class
+would recreate the label-construction leakage described in rule 2 above.
 
 Scientific role, limitations and acquisition windows: [`docs/external_data.md`](../../docs/external_data.md).
 
@@ -40,4 +83,8 @@ Scientific role, limitations and acquisition windows: [`docs/external_data.md`](
 python scripts/fetch_gebco_2026.py --dry-run
 python scripts/fetch_gebco_2026.py
 python scripts/fetch_gebco_2026.py --validate-only
+
+python scripts/fetch_noaa_crw.py --dry-run
+python scripts/fetch_noaa_crw.py --cross-check
+python scripts/fetch_noaa_crw.py --validate-only
 ```
