@@ -74,6 +74,22 @@ _ISO_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 #: assert that a bathymetry or satellite product is reef-health ground truth.
 FORBIDDEN_TARGET_CLAIMS: tuple[str, ...] = ("reef_health", "restoration_suitability")
 
+#: Biological *observations* the project's synthetic schema contains.  No
+#: remotely sensed or modelled product supplies these either: they require a
+#: diver, a quadrat, or a photograph scored by a human.
+#:
+#: This exists because thermal-stress products are the tempting case.  Degree
+#: Heating Weeks and Coral Bleaching HotSpot quantify *heat stress*, and heat
+#: stress is a widely used predictor of bleaching — but a DHW value is not an
+#: observed bleaching percentage, and thresholding one into a bleaching class
+#: would rebuild the 2026-08-19 audit's circular-supervision finding out of
+#: real-looking numbers.
+FORBIDDEN_BIOLOGICAL_CLAIMS: tuple[str, ...] = (
+    "coral_cover_percentage",
+    "bleaching_percentage",
+    "disease_percentage",
+)
+
 
 class ProvenanceError(ValueError):
     """A provenance record is structurally invalid."""
@@ -126,8 +142,16 @@ class SourceRecord:
 
     # ── Optional / defaulted ────────────────────────────────────────────────
     doi: str | None = None
+    #: Publisher's own catalogue identifier, where one exists separately from
+    #: the DOI (e.g. an NCEI ``gov.noaa.nodc:…`` collection id).
+    product_identifier: str | None = None
     sensor_type: str | None = None
     vertical_crs: str | None = None
+    #: ``{variable_name: units}`` for everything in :attr:`provides_variables`.
+    #: Units belong with the product, not only in prose: a thermal-stress value
+    #: in ``degree_Celsius_weeks`` is a different quantity from one in
+    #: ``degree_C``, and conflating them is silent corruption.
+    variable_units: dict[str, str] = field(default_factory=dict)
     licence_verified: bool = False
     licence_verified_via: str | None = None
     redistribution_allowed: bool | None = None
@@ -203,11 +227,54 @@ class SubsetRecord:
     bbox_rationale: str = ""
     is_synthetic: bool = False
 
+    # ── Time-varying subsets ────────────────────────────────────────────────
+    # GEBCO is a static compilation and leaves all of these ``None``.  A daily
+    # satellite product fills them in.  They are optional rather than a
+    # separate record type because the identity of a subset — which product,
+    # which window, which file, which checksum — is the same either way.
+    #: The single gridded variable this file carries, e.g. ``degree_heating_week``.
+    variable_name: str | None = None
+    variable_long_name: str | None = None
+    variable_units: str | None = None
+    #: Numeric type **as delivered**, e.g. ``float32``.  Recorded because a
+    #: subsetting service may narrow or widen the publisher's type, and that
+    #: sets the precision floor for any later comparison: agreement to 1e-7 is
+    #: exact for float32 and sloppy for float64.
+    variable_dtype: str | None = None
+    #: Missing-data sentinel **as delivered in this file**, which is not
+    #: necessarily the publisher's own sentinel — a subsetting service may
+    #: re-encode it (see the manifest's ``checksum_semantics`` sibling note).
+    fill_value: str | None = None
+
+    #: ``[start, end]`` as ISO-8601 UTC instants.
+    requested_time_range: tuple[str, str] | None = None
+    actual_time_range: tuple[str, str] | None = None
+    n_time_steps: int | None = None
+    #: Median spacing between consecutive time steps, in days.
+    time_spacing_days: float | None = None
+    #: Calendar days inside ``actual_time_range`` with no time step at all.
+    missing_dates: int | None = None
+
+    #: Percentage of grid cells that are fill/NaN — for a marine product this
+    #: is dominated by land, and is *not* a data-quality defect on its own.
+    nan_percent: float | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    mean_value: float | None = None
+    median_value: float | None = None
+    #: ``"ascending"`` or ``"descending"`` — recorded because it genuinely
+    #: differs between servers for the same product, and silently flipping a
+    #: grid north-for-south is an easy, invisible error.
+    latitude_order: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serialisable dict with tuples flattened to lists."""
         out = asdict(self)
         out["requested_bbox"] = list(out["requested_bbox"])
         out["actual_bbox"] = list(out["actual_bbox"])
+        for key in ("requested_time_range", "actual_time_range"):
+            if out[key] is not None:
+                out[key] = list(out[key])
         return out
 
 
@@ -284,11 +351,16 @@ def validate_source(record: SourceRecord, *, project_root: Path | None = None) -
         )
 
     # ── No external product may claim to supply a project target ────────────
-    claimed = {v.lower() for v in record.provides_variables}
-    forbidden = claimed.intersection(FORBIDDEN_TARGET_CLAIMS)
+    # Substring rather than exact matching: "bleaching_percentage (derived from
+    # DHW)" is exactly the claim this gate exists to stop, and it would slip
+    # past an equality test.
+    banned = FORBIDDEN_TARGET_CLAIMS + FORBIDDEN_BIOLOGICAL_CLAIMS
+    forbidden = sorted(
+        {name for name in banned for claim in record.provides_variables if name in claim.lower()}
+    )
     if forbidden:
         raise ProvenanceError(
-            f"{record.dataset_id}: provides_variables claims target(s) {sorted(forbidden)}. "
+            f"{record.dataset_id}: provides_variables claims target(s) {forbidden}. "
             f"No external dataset supplies reef-condition ground truth; see the dataset audit "
             f"of 2026-08-19, sections 18 and 12."
         )
@@ -345,6 +417,40 @@ def validate_subset(
     if not (-180.0 <= lon_min <= lon_max <= 180.0):
         raise ProvenanceError(
             f"{record.region}: actual_bbox longitudes invalid: {record.actual_bbox}"
+        )
+
+    for name in ("requested_time_range", "actual_time_range"):
+        window = getattr(record, name)
+        if window is None:
+            continue
+        if len(window) != 2:
+            raise ProvenanceError(f"{record.region}: {name} must be [start, end]")
+        start, end = window
+        for bound in (start, end):
+            if not _ISO_UTC_RE.match(bound):
+                raise ProvenanceError(
+                    f"{record.region}: {name} bound {bound!r} must be ISO-8601 UTC "
+                    f"'YYYY-MM-DDTHH:MM:SSZ'"
+                )
+        if start > end:  # ISO-8601 UTC sorts lexicographically
+            raise ProvenanceError(f"{record.region}: {name} starts after it ends: {window}")
+
+    if record.n_time_steps is not None and record.n_time_steps <= 0:
+        raise ProvenanceError(f"{record.region}: n_time_steps must be positive")
+
+    if record.nan_percent is not None and not 0.0 <= record.nan_percent <= 100.0:
+        raise ProvenanceError(
+            f"{record.region}: nan_percent must be a percentage in [0, 100]; "
+            f"got {record.nan_percent}"
+        )
+
+    if record.latitude_order is not None and record.latitude_order not in (
+        "ascending",
+        "descending",
+    ):
+        raise ProvenanceError(
+            f"{record.region}: latitude_order must be 'ascending' or 'descending'; "
+            f"got {record.latitude_order!r}"
         )
 
     if require_file:
@@ -461,7 +567,12 @@ def load_manifest(path: Path) -> list[SubsetRecord]:
         if unknown:
             raise ProvenanceError(f"{path}: unknown subset field(s) {sorted(unknown)}")
         entry = dict(entry)
-        for key in ("requested_bbox", "actual_bbox"):
+        for key in (
+            "requested_bbox",
+            "actual_bbox",
+            "requested_time_range",
+            "actual_time_range",
+        ):
             if key in entry and entry[key] is not None:
                 entry[key] = tuple(entry[key])
         records.append(SubsetRecord(**entry))

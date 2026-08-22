@@ -1,0 +1,1440 @@
+{
+  "schema": "coralsense.external.manifest/v1",
+  "dataset_id": "noaa_crw_5km_v3_1",
+  "source": {
+    "dataset_id": "noaa_crw_5km_v3_1",
+    "source_name": "NOAA Coral Reef Watch (NOAA/NESDIS/STAR)",
+    "product_name": "NOAA Coral Reef Watch Daily Global 5km (0.05 degree) Satellite Coral Bleaching Heat Stress Monitoring Product Suite",
+    "source_url": "https://coralreefwatch.noaa.gov/product/5km/index.php",
+    "version": "v3.1 (released 2018-08-01)",
+    "licence_name": "US Government public domain, attribution requested (NOAA Coral Reef Watch). Basis: NOAA CRW's published terms plus the licence metadata delivered inside the acquired files. Separately, and NOT as the basis for this determination, the project declines to acquire dates before 2002-12-01, keeping clear of the period where the restrictively licensed Met Office OSTIA reanalysis contributes directly to CoralTemp and of the November 1-29, 2002 merge window.",
+    "licence_url": "https://coralreefwatch.noaa.gov/satellite/docs/recommendations_crw_citation.php",
+    "citation": "Liu, Gang; Heron, Scott F.; Eakin, C. Mark; De La Cour, Jacqueline L.; Geiger, Erick F.; Tirak, Kyle V.; Skirving, William J.; Strong, Alan E. (2018). NOAA Coral Reef Watch (CRW) Daily Global 5-km (0.05 degree) Satellite Coral Bleaching Heat Stress Monitoring Product Suite. [Subset used: SST, SST Anomaly, Coral Bleaching HotSpot and Degree Heating Week, 2018-01-01 to 2024-12-31, for four Indian reef regions]. NOAA National Centers for Environmental Information. Dataset. https://doi.org/10.25921/6jgr-pt28. Accessed 2026-08-20.",
+    "observation_type": "derived",
+    "processing_level": "L4",
+    "original_format": "NetCDF-3 classic (server-side subset of a NetCDF-4 source)",
+    "original_crs": "EPSG:4326 (WGS 84 geographic), equirectangular, grid-cell centres",
+    "spatial_resolution": "0.05 degrees (~5 km)",
+    "temporal_resolution": "daily",
+    "geographic_scope": "Source product is global (-180/180, -90/90). Four regional subsets acquired: Lakshadweep, Gulf of Mannar, Gulf of Kutch, Andaman and Nicobar Islands.",
+    "temporal_scope": "Source product spans 1985-01-01 to present. Acquired window: 2018-01-01 to 2024-12-31 (seven complete calendar years).",
+    "retrieved_at_utc": "2026-08-20T13:50:00Z",
+    "access_method": "ERDDAP griddap server-side subsetting. Bulk retrieval from the NOAA PIFSC OceanWatch ERDDAP at https://oceanwatch.pifsc.noaa.gov/erddap/griddap; values cross-verified against the NOAA CoastWatch ERDDAP at https://coastwatch.noaa.gov/erddap/griddap. Both are NOAA-operated; no third-party mirror was used.",
+    "doi": "10.25921/6jgr-pt28",
+    "product_identifier": "gov.noaa.nodc:CRW-5km-HeatStressProducts",
+    "sensor_type": "Composite. SST inputs: AVHRR, VIIRS, GOES Imager, MTSAT Imager, AHI, ABI, SEVIRI, ATSR series, plus moored/drifting/TAO buoys and ship intake. HotSpot, SST Anomaly and DHW are computed from the resulting CoralTemp v3.1 SST analysis and are not separately sensed.",
+    "vertical_crs": null,
+    "variable_units": {
+      "sea_surface_temperature_c": "degree_C",
+      "sea_surface_temperature_anomaly_c": "degree_C",
+      "coral_bleaching_hotspot_c": "degree_C",
+      "degree_heating_week": "degree_Celsius_weeks"
+    },
+    "licence_verified": true,
+    "licence_verified_via": "Verified 2026-08-20 from first-party NOAA sources. (1) NOAA Coral Reef Watch's own disclaimer and citation page states: 'NOAA Coral Reef Watch (CRW) data posted on the internet are freely available to the public. All content on this website is considered to be in the public domain and may be distributed freely. We rely on the ethics and integrity of the user to ensure that the source of data and products is appropriately cited and credited.' (2) The 'license' global attribute delivered inside the NetCDF files themselves repeats the CRW statement that the data 'are available for use without restriction' with credit requested. (3) For CoralTemp SST specifically, that same attribute additionally carries an OSTIA Usage Statement and a GHRSST statement ('free and open'), reflecting CoralTemp's multi-source lineage. The determination above rests on (1) and (2) -- NOAA CRW's own publication terms for the product it distributes, and the licence metadata delivered with the files -- and is NOT inferred from the acquisition window's position in that lineage. SOURCE LINEAGE, recorded separately for provenance and re-verified 2026-08-22 against NOAA's CoralTemp source-history page (coralreefwatch.noaa.gov/product/5km/index_5km_sst.php): OSTIA reanalysis contributes directly January 1985 to November 2002; 'The OSTIA reanalysis and NOAA's reprocessed 5km Geo-Polar Blended SST dataset were linearly merged over a period of 29 days, from November 1-29, 2002'; NOAA reprocessed Geo-Polar Blended is the primary analysis from November 2002 to October 2016; a second 29-day merge runs October 1-29, 2016; NOAA operational near-real-time Geo-Polar Blended is primary from October 2016 onward. OSTIA does NOT drop out of the later record: NOAA states 'Bias corrections originally used the NOAA National Centers for Environmental Prediction (NCEP) real-time global SST. However, in 2016, the NOAA 5km Geo-Polar Blended SST product (which CRW's 5km satellite monitoring for coral reefs is based on) switched to using OSTIA as the bias correction.' The acquired 2018-2024 window therefore rests on a product that uses OSTIA as a bias-correction input, and must not be described as OSTIA-free. scripts/fetch_noaa_crw.py enforces a conservative project-policy floor of 2002-12-01 -- excluding the direct-OSTIA period and the 2002 linear-merge window only -- which is a provenance policy, not a licence boundary and not a source-purity claim.",
+    "redistribution_allowed": true,
+    "raw_tracked_in_git": false,
+    "is_synthetic": false,
+    "provides_variables": [
+      "sea_surface_temperature_c (satellite L4 analysis, surface, 5 km cell)",
+      "sea_surface_temperature_anomaly_c (departure from climatology)",
+      "coral_bleaching_hotspot_c (instantaneous thermal stress)",
+      "degree_heating_week (accumulated thermal stress over 12 weeks)"
+    ],
+    "cannot_provide": [
+      "coral_cover_percentage",
+      "bleaching_percentage",
+      "disease_percentage",
+      "reef_health",
+      "restoration_suitability",
+      "sonar_backscatter",
+      "acoustic_complexity_index",
+      "rugosity_index",
+      "depth_m",
+      "ph",
+      "turbidity_ntu",
+      "dissolved_oxygen_mg_l",
+      "salinity_ppt",
+      "in-situ subsurface water_temperature_c at reef depth"
+    ],
+    "disclaimer": "These are thermal-stress PREDICTORS, not biological observations. DHW is not a bleaching percentage; HotSpot is not a bleaching percentage; Bleaching Alert Area is not an observed bleaching class. NOAA's DHW thresholds (4 degC-weeks, 8 degC-weeks) describe risk, not an observed outcome. Deriving a reef_health or restoration_suitability label by thresholding any variable here would recreate the label-construction leakage documented in the 2026-08-19 audit using real-looking inputs. SST is a sea-SURFACE analysis and is not an in-situ subsurface measurement at reef depth.",
+    "notes": "Acquired as an isolated real thermal reference, source #2 after GEBCO_2026. Not joined to the synthetic prototype dataset, not joined to GEBCO, not used for modelling, and carrying no labels. The Bleaching Alert Area product was deliberately omitted; see the manifest's omitted_products block. The delivered files carry no CRW 'mask' variable, so land and missing data are not separable from each other within them - both appear as NaN."
+  },
+  "subsets": [
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Lakshadweep / Sea Surface Temperature (CoralTemp v3.1)",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_sst_lakshadweep.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 102682212,
+      "sha256": "ec8b83db00c821ef6f05012692f96621431c9d5382ad50bfd1e047be7b70156a",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_sst_v3_1.nc?analysed_sst[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(8.0):1:(12.6)][(71.5):1:(74.2)]",
+      "requested_bbox": [
+        8.0,
+        12.6,
+        71.5,
+        74.2
+      ],
+      "actual_bbox": [
+        8.024999618530273,
+        12.625,
+        71.5250015258789,
+        74.17500305175781
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 93,
+        "lon": 54
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Spans the archipelago from Minicoy (8 deg 15' N) to Cherbaniani Reef (12 deg 18' N, 71 deg 53' E). At 0.05 deg this is 93 x 54 CRW cells, the great majority of which are open Arabian Sea rather than reef.",
+      "is_synthetic": false,
+      "variable_name": "analysed_sst",
+      "variable_long_name": "Sea Surface Temperature (CoralTemp v3.1)",
+      "variable_units": "degree_C",
+      "variable_dtype": "float64",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 0.0,
+      "min_value": 24.95,
+      "max_value": 32.2,
+      "mean_value": 29.1925675271467,
+      "median_value": 29.12,
+      "latitude_order": "ascending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Gulf of Mannar / Sea Surface Temperature (CoralTemp v3.1)",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_sst_gulf_of_mannar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 14197080,
+      "sha256": "8394bb1d886e16a8a443f4b34a0284b5e679208c1996314e6b2f039cfa3d8cea",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_sst_v3_1.nc?analysed_sst[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(8.5):1:(9.5)][(78.0):1:(79.6)]",
+      "requested_bbox": [
+        8.5,
+        9.5,
+        78.0,
+        79.6
+      ],
+      "actual_bbox": [
+        8.524999618530273,
+        9.524999618530273,
+        78.0250015258789,
+        79.625
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 21,
+        "lon": 33
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Covers the 21-island chain between Tuticorin and Dhanushkodi, held at 9.5 N to exclude Palk Bay, which is a distinct system. Roughly 21 x 33 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "analysed_sst",
+      "variable_long_name": "Sea Surface Temperature (CoralTemp v3.1)",
+      "variable_units": "degree_C",
+      "variable_dtype": "float64",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 27.272727,
+      "min_value": 25.17,
+      "max_value": 32.97,
+      "mean_value": 28.929411067623395,
+      "median_value": 28.91,
+      "latitude_order": "ascending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Gulf of Kutch / Sea Surface Temperature (CoralTemp v3.1)",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_sst_gulf_of_kutch.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 15484812,
+      "sha256": "b324ce580d1aa95eec15b0e1155c3df7d368560f6ae31b521b0d16428d700f83",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_sst_v3_1.nc?analysed_sst[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(22.0):1:(23.0)][(68.9):1:(70.6)]",
+      "requested_bbox": [
+        22.0,
+        23.0,
+        68.9,
+        70.6
+      ],
+      "actual_bbox": [
+        22.024999618530273,
+        23.024999618530273,
+        68.875,
+        70.625
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 21,
+        "lon": 36
+      },
+      "grid_spacing_deg": 0.049999237061,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Covers the Marine National Park and the 42 islands along the Jamnagar coast. The northernmost of the four systems and the most seasonally extreme. Roughly 21 x 36 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "analysed_sst",
+      "variable_long_name": "Sea Surface Temperature (CoralTemp v3.1)",
+      "variable_units": "degree_C",
+      "variable_dtype": "float64",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 54.89418,
+      "min_value": 17.09,
+      "max_value": 31.76,
+      "mean_value": 26.824589678108016,
+      "median_value": 28.07,
+      "latitude_order": "ascending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Andaman and Nicobar Islands / Sea Surface Temperature (CoralTemp v3.1)",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_sst_andaman_nicobar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 145095416,
+      "sha256": "567d7dbcfca9d5e55a557c133fd0cdc6dbc506826705661461301d890eccd9dc",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_sst_v3_1.nc?analysed_sst[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(6.5):1:(14.0)][(92.0):1:(94.3)]",
+      "requested_bbox": [
+        6.5,
+        14.0,
+        92.0,
+        94.3
+      ],
+      "actual_bbox": [
+        6.525000095367432,
+        14.024999618530273,
+        92.0250015258789,
+        94.32499694824219
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 151,
+        "lon": 47
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Landfall Island (13 deg 39' N) to Indira Point (6 deg 45' N). Intrinsically large and mostly open Andaman Sea; it is an acquisition extent only and must be reduced to reef polygons before any modelling use. Roughly 151 x 47 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "analysed_sst",
+      "variable_long_name": "Sea Surface Temperature (CoralTemp v3.1)",
+      "variable_units": "degree_C",
+      "variable_dtype": "float64",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 2.536283,
+      "min_value": 25.78,
+      "max_value": 32.71,
+      "mean_value": 29.131920786219155,
+      "median_value": 29.02,
+      "latitude_order": "ascending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Lakshadweep / Sea Surface Temperature Anomaly",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_sst_anomaly_lakshadweep.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 51335104,
+      "sha256": "63687544ac4028357cd25a2953e87851a65e348c56a82bcee5a5acb45fced56b",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_sst_anom_v1_0.nc?sea_surface_temperature_anomaly[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(8.0):1:(12.6)][(71.5):1:(74.2)]",
+      "requested_bbox": [
+        8.0,
+        12.6,
+        71.5,
+        74.2
+      ],
+      "actual_bbox": [
+        8.024999618530273,
+        12.625,
+        71.5250015258789,
+        74.17500305175781
+      ],
+      "dimensions": {
+        "time": 2554,
+        "lat": 93,
+        "lon": 54
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Spans the archipelago from Minicoy (8 deg 15' N) to Cherbaniani Reef (12 deg 18' N, 71 deg 53' E). At 0.05 deg this is 93 x 54 CRW cells, the great majority of which are open Arabian Sea rather than reef.",
+      "is_synthetic": false,
+      "variable_name": "sea_surface_temperature_anomaly",
+      "variable_long_name": "Sea Surface Temperature Anomaly",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2554,
+      "time_spacing_days": 1.0,
+      "missing_dates": 4,
+      "nan_percent": 0.0,
+      "min_value": -1.809999942779541,
+      "max_value": 2.7699999809265137,
+      "mean_value": 0.6900601506231445,
+      "median_value": 0.6899999976158142,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Gulf of Mannar / Sea Surface Temperature Anomaly",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_sst_anomaly_gulf_of_mannar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 7109668,
+      "sha256": "498cfc16cb59926cb5f67fccf367c493d3f3f74e3930b686073e62b045b849b4",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_sst_anom_v1_0.nc?sea_surface_temperature_anomaly[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(8.5):1:(9.5)][(78.0):1:(79.6)]",
+      "requested_bbox": [
+        8.5,
+        9.5,
+        78.0,
+        79.6
+      ],
+      "actual_bbox": [
+        8.524999618530273,
+        9.524999618530273,
+        78.0250015258789,
+        79.625
+      ],
+      "dimensions": {
+        "time": 2554,
+        "lat": 21,
+        "lon": 33
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Covers the 21-island chain between Tuticorin and Dhanushkodi, held at 9.5 N to exclude Palk Bay, which is a distinct system. Roughly 21 x 33 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "sea_surface_temperature_anomaly",
+      "variable_long_name": "Sea Surface Temperature Anomaly",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2554,
+      "time_spacing_days": 1.0,
+      "missing_dates": 4,
+      "nan_percent": 27.272727,
+      "min_value": -1.9900000095367432,
+      "max_value": 3.4800000190734863,
+      "mean_value": 0.6344297999455806,
+      "median_value": 0.6600000262260437,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Gulf of Kutch / Sea Surface Temperature Anomaly",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_sst_anomaly_gulf_of_kutch.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 7753288,
+      "sha256": "1b7161354e4b4ca82d0ae80099a5ccd715a6d666262c6ad10eef525c49398b8e",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_sst_anom_v1_0.nc?sea_surface_temperature_anomaly[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(22.0):1:(23.0)][(68.9):1:(70.6)]",
+      "requested_bbox": [
+        22.0,
+        23.0,
+        68.9,
+        70.6
+      ],
+      "actual_bbox": [
+        22.024999618530273,
+        23.024999618530273,
+        68.875,
+        70.625
+      ],
+      "dimensions": {
+        "time": 2554,
+        "lat": 21,
+        "lon": 36
+      },
+      "grid_spacing_deg": 0.049999237061,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Covers the Marine National Park and the 42 islands along the Jamnagar coast. The northernmost of the four systems and the most seasonally extreme. Roughly 21 x 36 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "sea_surface_temperature_anomaly",
+      "variable_long_name": "Sea Surface Temperature Anomaly",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2554,
+      "time_spacing_days": 1.0,
+      "missing_dates": 4,
+      "nan_percent": 54.89418,
+      "min_value": -5.559999942779541,
+      "max_value": 3.940000057220459,
+      "mean_value": 0.6725473463094266,
+      "median_value": 0.8299999833106995,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Andaman and Nicobar Islands / Sea Surface Temperature Anomaly",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_sst_anomaly_andaman_nicobar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 72533508,
+      "sha256": "52f113481984e6bb38679a9093463e657c745045919b6a3d12b7d32b832990cc",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_sst_anom_v1_0.nc?sea_surface_temperature_anomaly[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(6.5):1:(14.0)][(92.0):1:(94.3)]",
+      "requested_bbox": [
+        6.5,
+        14.0,
+        92.0,
+        94.3
+      ],
+      "actual_bbox": [
+        6.525000095367432,
+        14.024999618530273,
+        92.0250015258789,
+        94.32499694824219
+      ],
+      "dimensions": {
+        "time": 2554,
+        "lat": 151,
+        "lon": 47
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Landfall Island (13 deg 39' N) to Indira Point (6 deg 45' N). Intrinsically large and mostly open Andaman Sea; it is an acquisition extent only and must be reduced to reef polygons before any modelling use. Roughly 151 x 47 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "sea_surface_temperature_anomaly",
+      "variable_long_name": "Sea Surface Temperature Anomaly",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2554,
+      "time_spacing_days": 1.0,
+      "missing_dates": 4,
+      "nan_percent": 2.536283,
+      "min_value": -1.600000023841858,
+      "max_value": 3.259999990463257,
+      "mean_value": 0.7267962937565684,
+      "median_value": 0.7200000286102295,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Lakshadweep / Coral Bleaching HotSpot",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_hotspot_lakshadweep.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 51354836,
+      "sha256": "d2879c36d31ce1e480bb7019e887d8287ed327c8c704bd87e03f36889d349002",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_hs_v1_0.nc?hotspot[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(8.0):1:(12.6)][(71.5):1:(74.2)]",
+      "requested_bbox": [
+        8.0,
+        12.6,
+        71.5,
+        74.2
+      ],
+      "actual_bbox": [
+        8.024999618530273,
+        12.625,
+        71.5250015258789,
+        74.17500305175781
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 93,
+        "lon": 54
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Spans the archipelago from Minicoy (8 deg 15' N) to Cherbaniani Reef (12 deg 18' N, 71 deg 53' E). At 0.05 deg this is 93 x 54 CRW cells, the great majority of which are open Arabian Sea rather than reef.",
+      "is_synthetic": false,
+      "variable_name": "hotspot",
+      "variable_long_name": "Coral Bleaching HotSpot",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 0.0,
+      "min_value": -4.860000133514404,
+      "max_value": 2.240000009536743,
+      "mean_value": -0.8053686295652425,
+      "median_value": -0.8799999952316284,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Gulf of Mannar / Coral Bleaching HotSpot",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_hotspot_gulf_of_mannar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 7112084,
+      "sha256": "618c21771194e9dd867d31e16da90cbaf6ccd5c9ad2974898927fd4a7654b115",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_hs_v1_0.nc?hotspot[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(8.5):1:(9.5)][(78.0):1:(79.6)]",
+      "requested_bbox": [
+        8.5,
+        9.5,
+        78.0,
+        79.6
+      ],
+      "actual_bbox": [
+        8.524999618530273,
+        9.524999618530273,
+        78.0250015258789,
+        79.625
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 21,
+        "lon": 33
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Covers the 21-island chain between Tuticorin and Dhanushkodi, held at 9.5 N to exclude Palk Bay, which is a distinct system. Roughly 21 x 33 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "hotspot",
+      "variable_long_name": "Coral Bleaching HotSpot",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 27.272727,
+      "min_value": -5.369999885559082,
+      "max_value": 2.5399999618530273,
+      "mean_value": -1.2785294624351926,
+      "median_value": -1.2599999904632568,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Gulf of Kutch / Coral Bleaching HotSpot",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_hotspot_gulf_of_kutch.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 7755956,
+      "sha256": "ee3e95bb123fab2c66ac1a382ada7e470207407f8c2e51b3ab8425ec91db5d21",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_hs_v1_0.nc?hotspot[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(22.0):1:(23.0)][(68.9):1:(70.6)]",
+      "requested_bbox": [
+        22.0,
+        23.0,
+        68.9,
+        70.6
+      ],
+      "actual_bbox": [
+        22.024999618530273,
+        23.024999618530273,
+        68.875,
+        70.625
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 21,
+        "lon": 36
+      },
+      "grid_spacing_deg": 0.049999237061,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Covers the Marine National Park and the 42 islands along the Jamnagar coast. The northernmost of the four systems and the most seasonally extreme. Roughly 21 x 36 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "hotspot",
+      "variable_long_name": "Coral Bleaching HotSpot",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 54.89418,
+      "min_value": -11.949999809265137,
+      "max_value": 2.7799999713897705,
+      "mean_value": -2.285326431581092,
+      "median_value": -1.0399999618530273,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Andaman and Nicobar Islands / Coral Bleaching HotSpot",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_hotspot_andaman_nicobar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 72561540,
+      "sha256": "ccb5464f657dd699178e7f82f5754c526437b3ae8e5ee25c5f34d5f581c620df",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_hs_v1_0.nc?hotspot[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(6.5):1:(14.0)][(92.0):1:(94.3)]",
+      "requested_bbox": [
+        6.5,
+        14.0,
+        92.0,
+        94.3
+      ],
+      "actual_bbox": [
+        6.525000095367432,
+        14.024999618530273,
+        92.0250015258789,
+        94.32499694824219
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 151,
+        "lon": 47
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Landfall Island (13 deg 39' N) to Indira Point (6 deg 45' N). Intrinsically large and mostly open Andaman Sea; it is an acquisition extent only and must be reduced to reef polygons before any modelling use. Roughly 151 x 47 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "hotspot",
+      "variable_long_name": "Coral Bleaching HotSpot",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 2.536283,
+      "min_value": -4.130000114440918,
+      "max_value": 3.130000114440918,
+      "mean_value": -0.6399842455014407,
+      "median_value": -0.7300000190734863,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Lakshadweep / Degree Heating Week",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_dhw_lakshadweep.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 51354808,
+      "sha256": "3288a8730ab5170f55711ca4d60b7ab2e49553499db0f086653fc4dd85fc14e2",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_dhw_v1_0.nc?degree_heating_week[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(8.0):1:(12.6)][(71.5):1:(74.2)]",
+      "requested_bbox": [
+        8.0,
+        12.6,
+        71.5,
+        74.2
+      ],
+      "actual_bbox": [
+        8.024999618530273,
+        12.625,
+        71.5250015258789,
+        74.17500305175781
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 93,
+        "lon": 54
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Spans the archipelago from Minicoy (8 deg 15' N) to Cherbaniani Reef (12 deg 18' N, 71 deg 53' E). At 0.05 deg this is 93 x 54 CRW cells, the great majority of which are open Arabian Sea rather than reef.",
+      "is_synthetic": false,
+      "variable_name": "degree_heating_week",
+      "variable_long_name": "Degree Heating Week",
+      "variable_units": "degree_Celsius_weeks",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 0.0,
+      "min_value": 0.0,
+      "max_value": 9.880000114440918,
+      "mean_value": 0.3969804882480199,
+      "median_value": 0.0,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Gulf of Mannar / Degree Heating Week",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_dhw_gulf_of_mannar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 7112052,
+      "sha256": "58649d0e747004d2f62be61a68464dca70f3384e89b0065d8ed89fa0781ca670",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_dhw_v1_0.nc?degree_heating_week[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(8.5):1:(9.5)][(78.0):1:(79.6)]",
+      "requested_bbox": [
+        8.5,
+        9.5,
+        78.0,
+        79.6
+      ],
+      "actual_bbox": [
+        8.524999618530273,
+        9.524999618530273,
+        78.0250015258789,
+        79.625
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 21,
+        "lon": 33
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Covers the 21-island chain between Tuticorin and Dhanushkodi, held at 9.5 N to exclude Palk Bay, which is a distinct system. Roughly 21 x 33 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "degree_heating_week",
+      "variable_long_name": "Degree Heating Week",
+      "variable_units": "degree_Celsius_weeks",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 27.272727,
+      "min_value": 0.0,
+      "max_value": 9.220000267028809,
+      "mean_value": 0.34590480874943724,
+      "median_value": 0.0,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Gulf of Kutch / Degree Heating Week",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_dhw_gulf_of_kutch.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 7755928,
+      "sha256": "d9aa434ffc70dea536d50a6c908e0398505d20109fca91daf4c60d8f9dcfe24f",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_dhw_v1_0.nc?degree_heating_week[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(22.0):1:(23.0)][(68.9):1:(70.6)]",
+      "requested_bbox": [
+        22.0,
+        23.0,
+        68.9,
+        70.6
+      ],
+      "actual_bbox": [
+        22.024999618530273,
+        23.024999618530273,
+        68.875,
+        70.625
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 21,
+        "lon": 36
+      },
+      "grid_spacing_deg": 0.049999237061,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Covers the Marine National Park and the 42 islands along the Jamnagar coast. The northernmost of the four systems and the most seasonally extreme. Roughly 21 x 36 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "degree_heating_week",
+      "variable_long_name": "Degree Heating Week",
+      "variable_units": "degree_Celsius_weeks",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 54.89418,
+      "min_value": 0.0,
+      "max_value": 20.450000762939453,
+      "mean_value": 1.1795279454488088,
+      "median_value": 0.0,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "region": "Andaman and Nicobar Islands / Degree Heating Week",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/noaa_crw_5km_v3_1_dhw_andaman_nicobar.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 72561512,
+      "sha256": "958c7c8c89fa3d1f6043d37f1e27b50a9613c7e29f200fbad2f0c4b9a5fc91a0",
+      "retrieved_at_utc": "2026-08-20T13:50:00Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_dhw_v1_0.nc?degree_heating_week[(2018-01-01T12:00:00Z):1:(2024-12-31T12:00:00Z)][(6.5):1:(14.0)][(92.0):1:(94.3)]",
+      "requested_bbox": [
+        6.5,
+        14.0,
+        92.0,
+        94.3
+      ],
+      "actual_bbox": [
+        6.525000095367432,
+        14.024999618530273,
+        92.0250015258789,
+        94.32499694824219
+      ],
+      "dimensions": {
+        "time": 2555,
+        "lat": 151,
+        "lon": 47
+      },
+      "grid_spacing_deg": 0.050000190735,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Identical to the GEBCO_2026 acquisition window. Landfall Island (13 deg 39' N) to Indira Point (6 deg 45' N). Intrinsically large and mostly open Andaman Sea; it is an acquisition extent only and must be reduced to reef polygons before any modelling use. Roughly 151 x 47 CRW cells.",
+      "is_synthetic": false,
+      "variable_name": "degree_heating_week",
+      "variable_long_name": "Degree Heating Week",
+      "variable_units": "degree_Celsius_weeks",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2024-12-31T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2018-01-01T12:00:00Z",
+        "2025-01-01T12:00:00Z"
+      ],
+      "n_time_steps": 2555,
+      "time_spacing_days": 1.0,
+      "missing_dates": 3,
+      "nan_percent": 2.536283,
+      "min_value": 0.0,
+      "max_value": 13.390000343322754,
+      "mean_value": 0.5951128729469201,
+      "median_value": 0.0,
+      "latitude_order": "descending"
+    }
+  ],
+  "checksum_semantics": {
+    "algorithm": "SHA-256",
+    "scope": "Hash of the regional subset file as retrieved by this project, computed locally at acquisition time.",
+    "is_publisher_canonical_checksum": false,
+    "guarantees": "The local file has not been altered since acquisition.",
+    "does_not_guarantee": "That re-requesting the same logical subset reproduces identical bytes. ERDDAP writes a fresh NetCDF on every request and embeds generation metadata, so two requests for the same window will differ in bytes while encoding equivalent values. A mismatch after re-fetch means 'different bytes', not necessarily 'different data'.",
+    "authoritative_identity": "Scientific identity of the source product is pinned by version 'v3.1 (released 2018-08-01)' and DOI 10.25921/6jgr-pt28, not by these file hashes."
+  },
+  "variable_semantics": {
+    "warning": "Every variable below is a thermal quantity. None is a biological observation. DHW != bleaching_percentage. HotSpot != bleaching_percentage. Bleaching Alert Area != observed bleaching class. These indicate thermal stress and bleaching RISK. Thresholding any of them into a reef-condition label is prohibited.",
+    "products": {
+      "sst": {
+        "label": "Sea Surface Temperature (CoralTemp v3.1)",
+        "erddap_variable": "analysed_sst",
+        "means": "Daily night-only gap-free analysed sea surface temperature, in degrees Celsius. An L4 analysis: a model-assimilated blend of satellite and in-situ inputs, spatially complete by construction rather than by observation.",
+        "does_not_mean": "Not an in-situ subsurface probe measurement. It is a skin/sub-skin SEA-SURFACE value covering a 5 km cell, so it is not interchangeable with a thermistor or CTD reading at reef depth, and must not be relabelled as one."
+      },
+      "sst_anomaly": {
+        "label": "Sea Surface Temperature Anomaly",
+        "erddap_variable": "sea_surface_temperature_anomaly",
+        "means": "Daily SST minus the long-term climatological mean for that location and day, in degrees Celsius. Positive means warmer than the climatology, negative cooler.",
+        "does_not_mean": "Not a temperature, and not interchangeable with SST: it is a difference from a reference climatology, so its zero point is a baseline choice rather than a physical origin."
+      },
+      "hotspot": {
+        "label": "Coral Bleaching HotSpot",
+        "erddap_variable": "hotspot",
+        "means": "Instantaneous coral bleaching heat stress, in degrees Celsius: daily SST minus the site's Maximum Monthly Mean (MMM) climatology. NOAA's published HotSpot maps show only positive values, but the archived variable carries the full signed difference (valid range -15 to +15), so negative values - cooler than the MMM - are normal and are not missing data. Values of 1 degC or more indicate heat stress capable of leading to bleaching, and only those accumulate into DHW.",
+        "does_not_mean": "Not a bleaching observation and not a bleaching percentage. It quantifies present thermal stress; whether corals actually bleached is a biological outcome that requires in-water or photographic observation."
+      },
+      "dhw": {
+        "label": "Degree Heating Week",
+        "erddap_variable": "degree_heating_week",
+        "means": "Accumulated coral bleaching heat stress over the preceding 12 weeks, in degC-weeks: the running accumulation of HotSpot values at or above 1 degC. NOAA associates 4 degC-weeks with a risk of bleaching and 8 degC-weeks with a risk of reef-wide bleaching plus mortality of heat-sensitive corals.",
+        "does_not_mean": "Not a bleaching percentage and not a reef-condition label. NOAA's thresholds describe RISK, not measured outcome. Thresholding DHW into a reef_health class would manufacture a label out of a predictor - precisely the circular supervision the 2026-08-19 audit found in the synthetic dataset."
+      }
+    }
+  },
+  "omitted_products": {
+    "bleaching_alert_area_7d_max": "Omitted from this first acquisition for three independent reasons. (1) Redundant: BAA is a deterministic function of the HotSpot and DHW values already acquired, so it adds no information. (2) Temporally incompatible: the only BAA product on these servers is the 7-day MAXIMUM composite, a rolling window dated on its last day, which does not align with the daily variables and would smear a 7-day maximum across daily rows. (3) Non-stationary within our window: on 2023-12-15 NOAA revised the alert-level system, extending it from Alert Level 2 to Alert Level 5, and the ERDDAP variable metadata still declares the superseded 0-4 scheme (valid_max=4). A naive ingest would silently mix two different categorical scales inside one 2018-2024 series. It can be reconstructed later from HotSpot and DHW under a single explicit scheme."
+  },
+  "diagnostics": {
+    "per_file": {
+      "sst/lakshadweep": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 0.0,
+        "min": 24.95,
+        "median": 29.12,
+        "mean": 29.1925675271467,
+        "max": 32.2,
+        "std": 0.8341411924536704,
+        "range_check": {
+          "bounds": [
+            -2.0,
+            40.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "sst/gulf_of_mannar": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 27.2727,
+        "min": 25.17,
+        "median": 28.91,
+        "mean": 28.929411067623395,
+        "max": 32.97,
+        "std": 1.13477278137142,
+        "range_check": {
+          "bounds": [
+            -2.0,
+            40.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "sst/gulf_of_kutch": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 54.8942,
+        "min": 17.09,
+        "median": 28.07,
+        "mean": 26.824589678108016,
+        "max": 31.76,
+        "std": 3.063586980464344,
+        "range_check": {
+          "bounds": [
+            -2.0,
+            40.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "sst/andaman_nicobar": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 2.5363,
+        "min": 25.78,
+        "median": 29.02,
+        "mean": 29.131920786219155,
+        "max": 32.71,
+        "std": 0.7596862507083261,
+        "range_check": {
+          "bounds": [
+            -2.0,
+            40.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "sst_anomaly/lakshadweep": {
+        "n_time_steps": 2554,
+        "missing_dates": 4,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 3.0,
+        "nan_percent": 0.0,
+        "min": -1.809999942779541,
+        "median": 0.6899999976158142,
+        "mean": 0.6900601506231445,
+        "max": 2.7699999809265137,
+        "std": 0.48284888599498305,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "sst_anomaly/gulf_of_mannar": {
+        "n_time_steps": 2554,
+        "missing_dates": 4,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 3.0,
+        "nan_percent": 27.2727,
+        "min": -1.9900000095367432,
+        "median": 0.6600000262260437,
+        "mean": 0.6344297999455806,
+        "max": 3.4800000190734863,
+        "std": 0.5754379753565162,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "sst_anomaly/gulf_of_kutch": {
+        "n_time_steps": 2554,
+        "missing_dates": 4,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 3.0,
+        "nan_percent": 54.8942,
+        "min": -5.559999942779541,
+        "median": 0.8299999833106995,
+        "mean": 0.6725473463094266,
+        "max": 3.940000057220459,
+        "std": 0.9723464143639667,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "sst_anomaly/andaman_nicobar": {
+        "n_time_steps": 2554,
+        "missing_dates": 4,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 3.0,
+        "nan_percent": 2.5363,
+        "min": -1.600000023841858,
+        "median": 0.7200000286102295,
+        "mean": 0.7267962937565684,
+        "max": 3.259999990463257,
+        "std": 0.43411818616314796,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "hotspot/lakshadweep": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 0.0,
+        "min": -4.860000133514404,
+        "median": -0.8799999952316284,
+        "mean": -0.8053686295652425,
+        "max": 2.240000009536743,
+        "std": 0.8337944039787913,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "hotspot/gulf_of_mannar": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 27.2727,
+        "min": -5.369999885559082,
+        "median": -1.2599999904632568,
+        "mean": -1.2785294624351926,
+        "max": 2.5399999618530273,
+        "std": 1.1170107788920292,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "hotspot/gulf_of_kutch": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 54.8942,
+        "min": -11.949999809265137,
+        "median": -1.0399999618530273,
+        "mean": -2.285326431581092,
+        "max": 2.7799999713897705,
+        "std": 3.067352119312896,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "hotspot/andaman_nicobar": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 2.5363,
+        "min": -4.130000114440918,
+        "median": -0.7300000190734863,
+        "mean": -0.6399842455014407,
+        "max": 3.130000114440918,
+        "std": 0.7749326969863567,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "dhw/lakshadweep": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 0.0,
+        "min": 0.0,
+        "median": 0.0,
+        "mean": 0.3969804882480199,
+        "max": 9.880000114440918,
+        "std": 1.2604231888632393,
+        "range_check": {
+          "bounds": [
+            0.0,
+            100.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "dhw/gulf_of_mannar": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 27.2727,
+        "min": 0.0,
+        "median": 0.0,
+        "mean": 0.34590480874943724,
+        "max": 9.220000267028809,
+        "std": 1.1551745163834979,
+        "range_check": {
+          "bounds": [
+            0.0,
+            100.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "dhw/gulf_of_kutch": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 54.8942,
+        "min": 0.0,
+        "median": 0.0,
+        "mean": 1.1795279454488088,
+        "max": 20.450000762939453,
+        "std": 2.693742489333346,
+        "range_check": {
+          "bounds": [
+            0.0,
+            100.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "dhw/andaman_nicobar": {
+        "n_time_steps": 2555,
+        "missing_dates": 3,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 2.0,
+        "nan_percent": 2.5363,
+        "min": 0.0,
+        "median": 0.0,
+        "mean": 0.5951128729469201,
+        "max": 13.390000343322754,
+        "std": 1.6631146322673942,
+        "range_check": {
+          "bounds": [
+            0.0,
+            100.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      }
+    },
+    "range_problems": [],
+    "cross_server_check": {
+      "sst": {
+        "values_agree": true,
+        "max_abs_difference": 0.0,
+        "tolerance": 1e-05,
+        "cells_compared": 2520,
+        "shape": [
+          5,
+          21,
+          33
+        ],
+        "fill_encoding_matches": true,
+        "valid_mask_mismatches": 0,
+        "fill_encoding_note": "The two servers encode missing data differently: CoastWatch declares _FillValue = -327.68, PIFSC delivers NaN. Cells invalid on one server and not the other are excluded from the value comparison. This is a serialisation difference, not a difference in the underlying CRW data.",
+        "retrieval_server": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap",
+        "reference_server": "https://coastwatch.noaa.gov/erddap/griddap"
+      },
+      "sst_anomaly": {
+        "values_agree": true,
+        "max_abs_difference": 2.8610229518832853e-08,
+        "tolerance": 1e-05,
+        "cells_compared": 2520,
+        "shape": [
+          5,
+          21,
+          33
+        ],
+        "fill_encoding_matches": true,
+        "valid_mask_mismatches": 0,
+        "fill_encoding_note": "The two servers encode missing data differently: CoastWatch declares _FillValue = -327.68, PIFSC delivers NaN. Cells invalid on one server and not the other are excluded from the value comparison. This is a serialisation difference, not a difference in the underlying CRW data.",
+        "retrieval_server": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap",
+        "reference_server": "https://coastwatch.noaa.gov/erddap/griddap"
+      },
+      "hotspot": {
+        "values_agree": true,
+        "max_abs_difference": 2.2888183615066282e-07,
+        "tolerance": 1e-05,
+        "cells_compared": 2520,
+        "shape": [
+          5,
+          21,
+          33
+        ],
+        "fill_encoding_matches": true,
+        "valid_mask_mismatches": 0,
+        "fill_encoding_note": "The two servers encode missing data differently: CoastWatch declares _FillValue = -327.68, PIFSC delivers NaN. Cells invalid on one server and not the other are excluded from the value comparison. This is a serialisation difference, not a difference in the underlying CRW data.",
+        "retrieval_server": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap",
+        "reference_server": "https://coastwatch.noaa.gov/erddap/griddap"
+      },
+      "dhw": {
+        "values_agree": true,
+        "max_abs_difference": 0.0,
+        "tolerance": 1e-05,
+        "cells_compared": 2520,
+        "shape": [
+          5,
+          21,
+          33
+        ],
+        "fill_encoding_matches": true,
+        "valid_mask_mismatches": 0,
+        "fill_encoding_note": "The two servers encode missing data differently: CoastWatch declares _FillValue = -327.68, PIFSC delivers NaN. Cells invalid on one server and not the other are excluded from the value comparison. This is a serialisation difference, not a difference in the underlying CRW data.",
+        "retrieval_server": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap",
+        "reference_server": "https://coastwatch.noaa.gov/erddap/griddap"
+      }
+    }
+  }
+}
