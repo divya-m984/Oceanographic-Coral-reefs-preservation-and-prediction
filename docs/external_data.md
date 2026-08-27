@@ -1,8 +1,9 @@
 # External (Real) Data Layer
 
-**Status:** two real external datasets acquired — GEBCO_2026 bathymetry and NOAA
-Coral Reef Watch 5 km v3.1 thermal products.
-**Created:** 2026-08-19 · **Updated:** 2026-08-20
+**Status:** three real external datasets acquired — GEBCO_2026 bathymetry, NOAA
+Coral Reef Watch 5 km v3.1 thermal products, and the Seaview Survey tabular
+benthic-cover data (the first **biological** source).
+**Created:** 2026-08-19 · **Updated:** 2026-08-25
 
 This document describes the real-data layer. It is deliberately separate from
 the synthetic prototype pipeline described in
@@ -796,7 +797,365 @@ retrained.**
 
 ---
 
-## 8. Reproducing the acquisitions
+## 8. Seaview Survey — the first biological source
+
+GEBCO says how deep the water is. CRW says how hot it got. Neither says
+anything about what is actually *living* on the reef. The Seaview Survey
+tabular data is the first product in this repository that does.
+
+It says it at one remove, though, and the whole of §8.4 is about that remove:
+the imagery, the dates and the coordinates are real field records, while the
+cover values are **image-derived benthic-cover estimates** computed from those
+images by a classifier.
+
+| | |
+|---|---|
+| Title | Seaview Survey Photo-quadrat and Image Classification Dataset |
+| Provider | The University of Queensland (UQ eSpace `UQ:734799`) |
+| DOI | [10.14264/uql.2019.930](https://doi.org/10.14264/uql.2019.930) |
+| Data descriptor | Rodriguez-Ramirez et al. (2020), *Sci Data* **7**, 355 — [10.1038/s41597-020-00698-6](https://doi.org/10.1038/s41597-020-00698-6) |
+| Released | 2019 (archive published 2019-12-09) |
+| Collected | 2012-09-16 → 2018-05-05 globally |
+| Licence | **CC BY 3.0 Unported** (normalized), Open Access — verified from the eSpace record; publisher's own label preserved in §8.10 |
+| Acquired | `tabular-data.zip` (341 MB, 18 CSVs) + the publisher's documentation PDF |
+| Not acquired | the >1 000 000-image photo-quadrat archive, annotated images, survey previews |
+
+### 8.1 INDIAN OCEAN IS NOT INDIA
+
+**This is the single most important fact about this dataset for this project,
+and it is the easiest one to get wrong.**
+
+The dataset's Central Indian Ocean component is **92 surveys**, and every one of
+them is in one of two places:
+
+| Territory | Surveys |
+|---|---|
+| Maldives (`MDV`) | 63 |
+| Chagos Archipelago / British Indian Ocean Territory (`CHA`) | 29 |
+
+**No survey in this dataset is in India.** Verified directly: no row of
+`seaviewsurvey_surveys.csv` has `country == 'IND'`.
+
+There is a genuine naming trap here. The `ocean` column uses `IND` for the
+**Indian Ocean basin**, and `IND` is also the ISO 3166-1 alpha-3 code for
+**India**. The human-annotation files are named `annotations_IND_MDV.csv` and
+`annotations_IND_CHA.csv`. Read casually, those look like Indian data. They are
+not.
+
+Against the project's four target reef systems:
+
+| Project reef system | Surveys here | Nearest Seaview transect |
+|---|---|---|
+| Lakshadweep | **0** | ~386 km |
+| Gulf of Mannar | **0** | ~654 km |
+| Gulf of Kutch | **0** | ~1 942 km |
+| Andaman and Nicobar Islands | **0** | ~2 046 km |
+
+The Seaview Indian Ocean envelope is latitude −6.699 → **+4.523**, longitude
+71.235 → 73.589. Lakshadweep begins near 8°N. The longitude bands overlap; the
+latitudes do not come close.
+
+The manifest carries this as a first-class field,
+`geographic_transfer_status = "INDIAN_OCEAN_NOT_INDIA"`.
+
+**Consequence.** This dataset does **not** validate any model for Lakshadweep,
+the Gulf of Mannar, the Gulf of Kutch, or the Andaman and Nicobar Islands.
+Fitting on Maldivian and Chagossian observations and applying the result to
+Indian reefs is a **geographic transfer** across a minimum 386 km gap into a
+different reef province. That may still be scientifically worthwhile — it is a
+far better starting point than nothing — but it must be reported as transfer,
+never as Indian validation.
+
+### 8.2 The four observational units
+
+    survey  ──▸  image  ──▸  quadrat  ──▸  annotation point
+
+| Unit | What it is | Indian Ocean count |
+|---|---|---|
+| Survey | one transect visit, 1.5–2.0 km at ~10 m depth | 92 |
+| Image | one raw photograph | 81 773 |
+| Quadrat | one standardised ~1 m² crop of an image | 137 698 |
+| Annotation point | one classified pixel location (50 per quadrat) | ~6.9 M |
+
+**Multiple quadrats from one image are not independent locations.** They are
+neighbouring patches of a single photograph, sharing its position, altitude,
+exposure and moment in time. In the Indian Ocean subset, 49 156 images yield 2
+quadrats each and 1 306 yield 6 (one yields 15, fourteen yield 16).
+
+> Treating 137 698 quadrats as 137 698 independent sites would overstate the
+> sample by roughly an order of magnitude. **The real spatial sample is 92
+> transects.**
+
+The aggregation rule from the data descriptor, which the manifest records:
+proportional cover per quadrat = points for a label ÷ total points; average
+quadrats within an image; average images within a survey; sum detailed labels
+into the five functional groups via `seaviewsurvey_labelsets.csv`.
+
+Reproducing that rule from the quadrat table recovers the published survey-level
+`pr_hard_coral` to a mean absolute difference of **0.0025** (max 0.040; 1 survey
+of 92 above 0.02) — which is the check that the rule above is the rule that was
+actually used.
+
+### 8.3 Tables
+
+| File | Rows | Unit |
+|---|---|---|
+| `seaviewsurvey_surveys.csv` | 860 | survey |
+| `seaviewsurvey_quadrats.csv` | 1 082 324 | quadrat (the hierarchy table) |
+| `seaviewsurvey_labelsets.csv` | 228 | label definition |
+| `seaviewsurvey_annotations.csv` | 55 229 185 | automated annotation point |
+| `seaviewsurvey_reefcover_indianocean.csv` | 137 698 | quadrat cover (45 labels) |
+| `seaviewsurvey_reefcover_{atlantic,southeastasia,pacificaustralia,pacifichawaii}.csv` | 285 008 / 250 138 / 316 369 / 93 111 | quadrat cover |
+| `annotations_{ATL,IND_CHA,IND_MDV,PAC_*}.csv` | 52 450 – 186 420 | **human** annotation point |
+
+### 8.4 The cover values are a classifier output, not a diver's notes
+
+Benthic cover here was produced by **nine VGG-D 16 convolutional neural
+networks** (one per country/region), each classifying **50 points per quadrat**.
+
+For the Indian Ocean subset:
+
+| | Quadrats | Share |
+|---|---|---|
+| Carry human expert annotations | 2 298 | **1.67 %** |
+| Classified by CNN only | 135 400 | **98.33 %** |
+
+#### Three layers of evidence, not one
+
+The temptation is to say "real reef survey, therefore real observed coral
+cover". That does **not** follow: the survey is real, but the cover number is
+two steps away from it.
+
+| Layer | What it is | Status |
+|---|---|---|
+| **A** — field survey imagery and coordinates | real photographs of real reef, with real transect coordinates, dates and ~10 m depth | **real field record** |
+| **B** — human image annotations | expert annotators scoring points on the 1.67 % training/test subset (`annotations_*.csv`) | **human judgement about an image**, not an in-water measurement |
+| **C** — ML-classified benthic cover | the cover columns and the survey-level `pr_*` columns, 98.33 % CNN output | **model output** — an image-derived benthic-cover estimate |
+
+**A is real, B is a human reading of A, and C is a model's reading of A.** The
+columns this project would actually use are layer C.
+
+The published validation is good — 97 % agreement between human and automated
+annotations, errors of <2 %–7 %, R² = 0.97 — and this is a well-built product.
+That validation is preserved exactly as published, but it is a property of the
+classifier: **a well-validated estimate is still an estimate**, and accuracy
+figures do not promote a prediction into a measurement.
+
+So, throughout this repository:
+
+| Use | Do not use |
+|---|---|
+| image-derived benthic-cover estimate | directly observed coral cover |
+| ML-estimated benthic cover | field-measured coral cover |
+| image-derived biological response estimate | measured coral cover |
+| | biological ground truth |
+
+This matters practically: "we validated against observed coral cover" is **not**
+a sentence this dataset supports, because 98 % of those observations are model
+output.
+
+### 8.5 Target compatibility — neither target exists here
+
+| Project target | Verdict |
+|---|---|
+| `reef_health` | **PARTIAL BIOLOGICAL EVIDENCE ONLY — NOT A TARGET** |
+| `restoration_suitability` | **NO DIRECT TARGET** |
+
+    hard_coral_cover  !=  reef_health
+    algal_cover       !=  reef_health
+    benthic class     !=  restoration_suitability
+
+`reef_health` in the synthetic pipeline is a constructed *condition judgement*.
+Image-derived hard-coral cover is an *estimate of one component* of reef state.
+Thresholding cover into a health class would rebuild exactly the
+label-construction leakage the
+[2026-08-19 audit](audits/dataset_scientific_audit_2026-08-19.md) found — this
+time out of real numbers, which makes it **harder** to spot, not safer.
+
+`restoration_suitability` has no counterpart at all: no intervention, no
+restoration outcome, no site-selection judgement, no management variable.
+
+**What is legitimate:** survey-level hard-coral cover is an **image-derived
+continuous biological response estimate**, and may be used as the response
+variable in a separate real-data analysis provided it is described that way.
+That is a different modelling problem from the registered synthetic
+classifiers, and it does not change, retrain or supersede them.
+
+**Which field to use, when that analysis happens.** Use the publisher's
+survey-level **`pr_hard_coral`** from `seaviewsurvey_surveys.csv`, not a
+hard-coral total reconstructed from the quadrat label columns of
+`seaviewsurvey_reefcover_indianocean.csv` — those columns carry the export
+defect described in §8.8, and the survey is in any case the honest spatial unit
+(92 transects, not 137 698 pseudo-independent quadrats). **No such analysis has
+been performed here; this is a recommendation for the first one.**
+
+### 8.6 What the Indian Ocean subset actually contains
+
+Survey-level cover, all 92 surveys — image-derived estimates, proportions
+summing to 1.000 ± 0.0004:
+
+| | mean | sd | min | median | max |
+|---|---|---|---|---|---|
+| Hard coral | 0.177 | 0.083 | 0.018 | 0.176 | 0.531 |
+| Algae | 0.711 | 0.135 | 0.206 | 0.727 | 0.954 |
+| Soft coral | 0.025 | 0.039 | 0.001 | 0.006 | 0.209 |
+| Other invertebrates | 0.007 | 0.008 | 0.000 | 0.004 | 0.041 |
+| Other / substrate | 0.081 | 0.075 | 0.002 | 0.058 | 0.398 |
+
+Chagos and the Maldives are not interchangeable. Chagos carries more hard coral
+(0.211 vs 0.161) and an order of magnitude more soft coral (0.067 vs 0.006);
+the Maldives carries more algae (0.765 vs 0.593).
+
+**Missingness: none.** No blank cell in `seaviewsurvey_surveys.csv` or in the
+Indian Ocean cover table. **No outliers were removed** — every delivered row is
+present as published.
+
+### 8.7 Temporal structure — a paired pre/post design, in one country only
+
+| | Chagos | Maldives |
+|---|---|---|
+| Date range | 2015-02-12 → 2015-02-24 | 2015-03-29 → 2017-04-01 |
+| Distinct dates | 12 | 33 |
+| Epochs | **one** (Feb 2015) | **two** (Mar–Apr 2015; Mar–Apr 2017) |
+| Repeat transects | **0** | **26** |
+
+Twenty-six Maldivian transects were surveyed twice, **703–722 days apart**,
+bracketing the 2016 mass-bleaching period. Of 66 distinct Indian Ocean
+transects, 40 were visited once and 26 twice; no transect was visited three
+times.
+
+So what those 26 pairs support is a **paired pre/post survey change around the
+2016 mass-bleaching period** — for the Maldives only. Chagos has a single
+expedition and no repeats, so no paired comparison is possible there at all.
+
+**What that is.** A real temporal contrast: the same transect, twice, roughly
+two years apart, with an image-derived benthic-cover estimate at each visit.
+
+**What that is not.** It is **not a "bleaching response"**, and this document
+does not call it one. The dataset contains no bleaching observation, no thermal
+covariate and no control. A difference in cover between two visits is a
+difference in cover; on its own it does not establish that bleaching caused it,
+because storm damage, disease, predation, transect re-navigation and
+classifier/sampling variation are not excluded by the design.
+
+**What would strengthen it, and how far.** NOAA CRW HotSpot and Degree Heating
+Week exposure — already acquired in this repository, §7 — should eventually be
+linked to these transects **by site and date**. That linkage has **not** been
+performed; no join exists between Seaview and CRW. And even once it does exist,
+the design stays observational: it can support an **association** between
+thermal exposure and cover change. It does not license automatic causal
+attribution.
+
+That is the honest description. This is not a longitudinal monitoring programme
+with a regular revisit schedule; it is two expeditions two years apart.
+
+### 8.8 A defect in the published Indian Ocean table — recorded, not repaired
+
+`seaviewsurvey_reefcover_indianocean.csv` has **no `MASE_MEA_L` column**, even
+though `MASE_MEA_L` (*Lobophyllia*, functional group **Hard Coral**) is defined
+for the Indian Ocean in `seaviewsurvey_labelsets.csv` and does appear in
+`seaviewsurvey_annotations.csv`. The same table instead carries `MASE_LRG_I`
+(*Isopora*) — a label defined only for **Southeast Asia** — which is zero across
+all 137 698 rows.
+
+The evidence is unambiguous in both directions:
+
+- all **135 185** quadrats with no `MASE_MEA_L` annotation sum to **exactly
+  1.00** across label columns;
+- all **2 513** quadrats that do have `MASE_MEA_L` points sum to **less than
+  1.00** (mean 0.963, min 0.44).
+
+**Impact:** quadrat-level hard coral cover is under-reported for 2 513 of
+137 698 Indian Ocean quadrats (1.83 %), by 4 669 classified points; the worst
+affected quadrat loses 56 % of its cover. The survey-level `pr_hard_coral`
+values in `seaviewsurvey_surveys.csv` do *not* show this shortfall and appear to
+include the dropped label.
+
+**Handling:** recorded, not repaired. The CSV has not been edited; nothing has
+been imputed, dropped or rescaled; no affected row has been removed. The raw
+bytes are untouched and their SHA-256 is pinned in the manifest. For
+survey-level hard coral cover, prefer `seaviewsurvey_surveys.csv`. For
+quadrat-level work, either accept the documented 1.83 % under-count or recover
+the points from `seaviewsurvey_annotations.csv`.
+
+**Recommendation for the first biological-response analysis:** use the
+publisher-provided survey-level **`pr_hard_coral`** rather than reconstructing
+hard-coral cover from these known-defective quadrat label columns. Not
+performed here — see §8.5.
+
+### 8.9 The intended real-biological track — designed, not built
+
+```
+        Seaview survey record
+        (survey date · location · image-derived cover estimate)
+                        │
+        ┌───────────────┼───────────────┐
+        │               │               │
+   NOAA CRW        GEBCO             image-derived
+   thermal         bathymetric       biological
+   context         context           response estimate
+```
+
+**None of this exists yet. No join has been performed in this task, and no model
+has been trained.** The diagram records intent so the next step is a decision
+rather than a drift.
+
+Three things that must be settled *before* any such join:
+
+1. **The spatial unit.** Seaview's real sample is 92 transects; CRW's cell is
+   ~5 km. Several transects may fall in one CRW cell.
+2. **The temporal unit.** A survey is a single day. Thermal history is a
+   trajectory. Which window — and chosen on what grounds, decided before
+   looking at the response?
+3. **The transfer.** Any such model is fitted on Maldives and Chagos. See §8.1.
+
+### 8.10 Licence — normalized, with the publisher's own wording preserved
+
+`licence_verified = True`, `redistribution_allowed = True`.
+
+Read from the **authoritative dataset record** in UQ eSpace (`UQ:734799`), whose
+licence field reads verbatim *"Creative Commons Attribution 3.0 International
+(CC BY 3.0)"* with access conditions *"Open Access"*, and which supplies the
+licence URI `https://creativecommons.org/licenses/by/3.0/`. Cross-checked
+against the peer-reviewed data descriptor, whose Usage Notes state the dataset
+is released under a *"Creative Commons Attribution license (CC BY 3.0)"*.
+**The two agree.**
+
+**Not** established by the DOI: Crossref registers `10.14264/uql.2019.930` with
+title, publisher, year and creators, and **no licence field at all**. A DOI that
+resolves is not a licence statement.
+
+**The label is imprecise; the URI is not.** There is no CC BY *"3.0
+International"*: version 3.0 was issued as **Unported** plus ported national
+forms, and the "International" wording only begins at version 4.0 — which is
+not what was granted here. The licence URI in the same record is unambiguous
+and resolves to Creative Commons Attribution 3.0 Unported, so **the URI
+governs**. Two facts are therefore recorded side by side rather than one
+overwriting the other:
+
+| Field | Value |
+|---|---|
+| `source_reported_licence_label` | "Creative Commons Attribution 3.0 International (CC BY 3.0)" — UQ's own wording, kept verbatim |
+| `normalized_licence` | **CC BY 3.0 Unported** |
+| `licence_url` | `https://creativecommons.org/licenses/by/3.0/` |
+
+The manifest carries these in a `licence_normalization` block. UQ did write
+that label, and the record says so; what changes is our reading of it, not the
+publisher's history. The normalization changes wording and not permissions:
+Unported and any ported 3.0 form both grant redistribution, adaptation and
+commercial use subject to attribution.
+
+`raw_tracked_in_git` remains `False`. The licence would permit committing 341 MB
+of CSV; that is a storage decision, and the answer is still no.
+
+**Transport caveat.** The publisher serves this collection over **plain HTTP**
+only — `data.qld.edu.au` does not answer on port 443. The transfer was therefore
+not authenticated in transit, which is why every acquired file carries a pinned
+SHA-256 in the manifest.
+
+---
+
+## 9. Reproducing the acquisitions
 
 ```bash
 python scripts/fetch_gebco_2026.py --dry-run        # print the plan, fetch nothing
@@ -806,6 +1165,10 @@ python scripts/fetch_gebco_2026.py --validate-only  # re-validate local files
 python scripts/fetch_noaa_crw.py --dry-run          # print the plan, fetch nothing
 python scripts/fetch_noaa_crw.py --cross-check      # fetch, validate, compare servers
 python scripts/fetch_noaa_crw.py --validate-only    # re-validate local files
+
+python scripts/fetch_seaview.py --dry-run           # print the plan, fetch nothing
+python scripts/fetch_seaview.py                     # fetch tables, extract, write manifest
+python scripts/fetch_seaview.py --validate-only     # re-inspect local tables
 ```
 
 GEBCO is requested from the **THREDDS NetCDF Subset Service** hosted by CEDA on
@@ -816,15 +1179,15 @@ ever downloaded.
 
 ---
 
-## 9. What has NOT been done
+## 10. What has NOT been done
 
 Each acquisition was done in isolation. Specifically **not** done:
 
 - No change to `generate_data.py`, `preprocess.py`, `build_features.py`,
   `get_feature_columns()`, or the Pandera schema
 - No external rows appended to `observations.csv`
-- **No join between GEBCO and CRW**, and no join between either and any other
-  table. They remain two independent products over a shared extent
+- **No join between GEBCO, CRW and Seaview**, and no join between any of them
+  and any other table. They remain three independent products
 - No site table, no training table, no new CSVs
 - No labels created of any kind
 - No model trained, registered, promoted, or evaluated
@@ -834,7 +1197,7 @@ Each acquisition was done in isolation. Specifically **not** done:
 
 ---
 
-## 10. Other sources — status
+## 11. Other sources — status
 
 From the acquisition plan, with one **correction**.
 
@@ -842,6 +1205,8 @@ From the acquisition plan, with one **correction**.
 |---|---|
 | **GEBCO_2026** | **ACQUIRED** — public domain, verified |
 | **NOAA Coral Reef Watch 5 km v3.1** | **ACQUIRED** — public domain, verified (see §7) |
+| **Seaview Survey (tabular)** | **ACQUIRED** — CC BY 3.0 Unported, verified (see §8.10). Maldives + Chagos only — **not India** |
+| NCSCM / CReON (India) | Not acquired — programme use acceptable for academic work, but **no tabular/database export of the underlying observations is available**. Remains an authoritative Indian reference source, not an ML dataset |
 | **Allen Coral Atlas** | **LICENCE REQUIRES VERIFICATION** — see below |
 | RECIFS | Not acquired — public domain per publisher statement |
 | HICORDIS | Not acquired — CC BY 4.0 per article |

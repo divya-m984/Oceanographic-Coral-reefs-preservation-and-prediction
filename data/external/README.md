@@ -32,17 +32,64 @@ terms are recorded per product in its manifest.
 |---|---|---|---|---|
 | GEBCO Grid | `GEBCO_2026` | Public domain (verified) | Allowed | `metadata/gebco_2026.manifest.json` |
 | NOAA Coral Reef Watch 5 km | `v3.1` | US Government public domain, attribution requested (verified) | Allowed | `metadata/noaa_crw_5km_v3_1.manifest.json` |
+| Seaview Survey (tabular) | 2019 release | CC BY 3.0 Unported (verified; publisher's label normalized) | Allowed | `metadata/seaview_survey.manifest.json` |
 
-Both cover the same four Indian reef systems — Lakshadweep, Gulf of Mannar, Gulf
-of Kutch, Andaman and Nicobar Islands — over identical acquisition windows.
-**They are not joined to each other.**
+The first two cover the same four Indian reef systems — Lakshadweep, Gulf of
+Mannar, Gulf of Kutch, Andaman and Nicobar Islands — over identical acquisition
+windows. **Seaview covers none of them** (see below). **No two of the three are
+joined to each other.**
 
-| | GEBCO_2026 | NOAA CRW 5 km v3.1 |
-|---|---|---|
-| Quantity | Bathymetry / terrain | Thermal: SST, SST anomaly, HotSpot, DHW |
-| Resolution | 15″ (~450 m) | 0.05° (~5 km) |
-| Time | Static compilation | Daily, 2018-01-01 → 2024-12-31 |
-| Files | 4 | 16 (4 variables × 4 regions) |
+| | GEBCO_2026 | NOAA CRW 5 km v3.1 | Seaview Survey |
+|---|---|---|---|
+| Quantity | Bathymetry / terrain | Thermal: SST, SST anomaly, HotSpot, DHW | **Biological**: image-derived benthic-cover estimates |
+| Resolution | 15″ (~450 m) | 0.05° (~5 km) | ~1 m² photo-quadrat |
+| Time | Static compilation | Daily, 2018-01-01 → 2024-12-31 | Survey dates, 2015-02-12 → 2017-04-01 (Indian Ocean) |
+| Geography | 4 Indian reef systems | 4 Indian reef systems | **Maldives + Chagos** |
+| Files | 4 | 16 (4 variables × 4 regions) | 18 CSV tables |
+
+### Seaview: Indian Ocean is not India
+
+Seaview is the project's first **real biological** source, and the one most
+likely to be misdescribed. Its Central Indian Ocean component is **92 surveys**:
+**63 in the Maldives** and **29 in the Chagos Archipelago**. No survey is in
+India — no row of `seaviewsurvey_surveys.csv` has `country == 'IND'`.
+
+Beware the naming collision: the `ocean` column uses `IND` for the **Indian
+Ocean basin**, which is also the ISO code for **India**, and the human
+annotation files are named `annotations_IND_MDV.csv` / `annotations_IND_CHA.csv`.
+
+Zero surveys in Lakshadweep, the Gulf of Mannar, the Gulf of Kutch, or the
+Andaman and Nicobar Islands; the nearest transect is ~386 km from Lakshadweep.
+**This dataset does not validate any model for Indian reefs.** The manifest
+records this as `geographic_transfer_status = "INDIAN_OCEAN_NOT_INDIA"`.
+
+### Seaview: cover is estimated from images, not measured in the water
+
+Three distinct things travel together in this product, and they must not be
+collapsed into "real observed coral cover":
+
+- **A — field survey imagery and coordinates:** real photographs of real reef,
+  with real dates and transect coordinates. A genuine field record.
+- **B — human image annotations:** experts scoring points on 1.67 % of Indian
+  Ocean quadrats. A human judgement *about an image*.
+- **C — ML-classified benthic cover:** the cover columns themselves, 98.33 %
+  VGG-D 16 CNN output. **Model output.**
+
+The columns a model would consume are layer C, so call them **image-derived
+benthic-cover estimates** or **ML-estimated benthic cover** — never *directly
+observed*, *field-measured*, *measured coral cover*, or *biological ground
+truth*. The published 97 % classifier validation is real and is preserved, but
+a well-validated estimate is still an estimate.
+
+The paired revisits are subject to the same care: 26 Maldivian transects were
+surveyed twice, 703–722 days apart. That is a **paired pre/post survey change
+around the 2016 mass-bleaching period** — a real temporal contrast, not a
+measured "bleaching response", and not on its own evidence that bleaching
+caused the change. CRW HotSpot/DHW exposure should eventually be linked by site
+and date; that has not been done, and even then the design stays observational.
+
+And the targets: `hard_coral_cover != reef_health`, `benthic class !=
+restoration_suitability`. See [`docs/external_data.md`](../../docs/external_data.md) §8.
 
 ### CRW licence caveat
 
@@ -87,4 +134,8 @@ python scripts/fetch_gebco_2026.py --validate-only
 python scripts/fetch_noaa_crw.py --dry-run
 python scripts/fetch_noaa_crw.py --cross-check
 python scripts/fetch_noaa_crw.py --validate-only
+
+python scripts/fetch_seaview.py --dry-run
+python scripts/fetch_seaview.py
+python scripts/fetch_seaview.py --validate-only
 ```
