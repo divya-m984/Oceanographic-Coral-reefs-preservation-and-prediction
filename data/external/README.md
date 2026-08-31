@@ -28,16 +28,40 @@ terms are recorded per product in its manifest.
 
 ## Currently acquired
 
+Three products, four manifests — NOAA CRW was acquired twice under separate
+scopes and the two acquisitions must not be conflated.
+
 | Product | Version | Licence | Redistribution | Manifest |
 |---|---|---|---|---|
 | GEBCO Grid | `GEBCO_2026` | Public domain (verified) | Allowed | `metadata/gebco_2026.manifest.json` |
-| NOAA Coral Reef Watch 5 km | `v3.1` | US Government public domain, attribution requested (verified) | Allowed | `metadata/noaa_crw_5km_v3_1.manifest.json` |
+| NOAA Coral Reef Watch 5 km — **India**, 2018–2024 | `v3.1` | US Government public domain, attribution requested (verified) | Allowed | `metadata/noaa_crw_5km_v3_1.manifest.json` |
+| NOAA Coral Reef Watch 5 km — **Maldives**, 2015–2017 | `v3.1` | Same product, same determination | Allowed | `metadata/noaa_crw_5km_v3_1_maldives_seaview.manifest.json` |
 | Seaview Survey (tabular) | 2019 release | CC BY 3.0 Unported (verified; publisher's label normalized) | Allowed | `metadata/seaview_survey.manifest.json` |
 
-The first two cover the same four Indian reef systems — Lakshadweep, Gulf of
-Mannar, Gulf of Kutch, Andaman and Nicobar Islands — over identical acquisition
-windows. **Seaview covers none of them** (see below). **No two of the three are
-joined to each other.**
+GEBCO and the **India** CRW windows cover the same four Indian reef systems —
+Lakshadweep, Gulf of Mannar, Gulf of Kutch, Andaman and Nicobar Islands — over
+identical acquisition windows. **Seaview covers none of them** (see below), and
+neither does the Maldives CRW extension.
+
+### The two CRW acquisitions are not interchangeable
+
+| | `noaa_crw_5km_v3_1` | `noaa_crw_5km_v3_1_maldives_seaview` |
+|---|---|---|
+| Purpose | India-region environmental context | Support for the §8a paired analysis |
+| Geography | Four **Indian** reef systems | One **Maldives** window |
+| Window | 2018-01-01 → 2024-12-31 | 2015-03-29 → 2017-04-01 |
+| Variables | SST, SST anomaly, HotSpot, DHW | HotSpot, DHW |
+| Raw path | `raw/noaa_crw_5km_v3_1/` | `raw/noaa_crw_5km_v3_1/maldives_seaview/` |
+
+`MALDIVES_NOT_INDIA` — files under `maldives_seaview/` are Maldivian and must
+never be presented as Indian data or pooled with the India windows. The
+scientific product, provider, DOI and licence determination are identical; only
+the acquisition scope differs. Acquiring the second did not modify the first.
+
+**One join exists**, and only one: Seaview survey records ↔ the Maldives CRW
+extension, for the observational association analysis documented in
+[`docs/external_data.md`](../../docs/external_data.md) §8a. GEBCO is joined to
+nothing, and the India CRW windows are joined to nothing.
 
 | | GEBCO_2026 | NOAA CRW 5 km v3.1 | Seaview Survey |
 |---|---|---|---|
@@ -82,11 +106,19 @@ truth*. The published 97 % classifier validation is real and is preserved, but
 a well-validated estimate is still an estimate.
 
 The paired revisits are subject to the same care: 26 Maldivian transects were
-surveyed twice, 703–722 days apart. That is a **paired pre/post survey change
-around the 2016 mass-bleaching period** — a real temporal contrast, not a
-measured "bleaching response", and not on its own evidence that bleaching
-caused the change. CRW HotSpot/DHW exposure should eventually be linked by site
-and date; that has not been done, and even then the design stays observational.
+surveyed twice, 703–722 days apart (2015-03-29 → 2017-04-01). That is a
+**paired pre/post survey change around the 2016 mass-bleaching period** — a real
+temporal contrast, not a measured "bleaching response", and not on its own
+evidence that bleaching caused the change.
+
+**Updated 2026-08-30:** CRW HotSpot/DHW exposure has now been linked to those 26
+transects by site and date, using the Maldives CRW extension above. The design
+stays observational and the result is reported as an association, not a cause:
+cover declined on 22 of 26 transects (Wilcoxon p = 0.00041), while neither
+exposure metric correlated detectably with the size of that decline
+(Spearman ρ = −0.118 and −0.076, both intervals spanning zero), across an
+exposure range too narrow for the design to resolve one. Full method, results
+and limitations: [`docs/external_data.md`](../../docs/external_data.md) §8a.
 
 And the targets: `hard_coral_cover != reef_health`, `benthic class !=
 restoration_suitability`. See [`docs/external_data.md`](../../docs/external_data.md) §8.
@@ -138,4 +170,10 @@ python scripts/fetch_noaa_crw.py --validate-only
 python scripts/fetch_seaview.py --dry-run
 python scripts/fetch_seaview.py
 python scripts/fetch_seaview.py --validate-only
+
+# Maldives CRW historical extension + the §8a paired analysis.
+# The fetch derives its window from the Seaview surveys, so run fetch_seaview.py first.
+python scripts/fetch_noaa_crw_maldives.py --dry-run
+python scripts/fetch_noaa_crw_maldives.py
+python scripts/analyze_seaview_maldives_pairs.py
 ```

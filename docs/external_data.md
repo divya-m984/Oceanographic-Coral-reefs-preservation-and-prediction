@@ -2,8 +2,12 @@
 
 **Status:** three real external datasets acquired — GEBCO_2026 bathymetry, NOAA
 Coral Reef Watch 5 km v3.1 thermal products, and the Seaview Survey tabular
-benthic-cover data (the first **biological** source).
-**Created:** 2026-08-19 · **Updated:** 2026-08-25
+benthic-cover data (the first **biological** source) — across four manifests,
+because CRW was acquired twice under separate scopes: the 2018–2024 **India**
+windows (§7) and a 2015–2017 **Maldives** historical extension (§8a).
+One analysis joins two of them: the Seaview Maldives paired temporal analysis
+in §8a. Everything else remains unjoined.
+**Created:** 2026-08-19 · **Updated:** 2026-08-30
 
 This document describes the real-data layer. It is deliberately separate from
 the synthetic prototype pipeline described in
@@ -1155,6 +1159,296 @@ SHA-256 in the manifest.
 
 ---
 
+## 8a. Seaview Maldives paired temporal analysis
+
+**Added:** 2026-08-30. This is the first analysis in the repository that
+**joins** two real external products — Seaview survey records and NOAA CRW
+thermal history. Everything before it was acquired in isolation, and §10's list
+of things not done is amended accordingly: that list still holds for GEBCO, and
+for the Indian CRW windows, but no longer for this one pairing.
+
+It answers exactly one question:
+
+> Across the 26 Maldivian transects Seaview surveyed twice, is greater thermal
+> exposure between the two visits **associated with** a larger decline in the
+> image-derived hard-coral-cover estimate?
+
+`MALDIVES_NOT_INDIA`. Every transect is Maldivian. No Indian reef is involved,
+no Indian model is validated, and nothing produced here is Indian data.
+
+### 8a.1 Why exactly 26 pairs
+
+A transect enters the analysis only if it is in the Maldives (`ocean == 'IND'`
+**and** `country == 'MDV'`) and has **exactly two** survey rows in
+`seaviewsurvey_surveys.csv`. Of 37 Maldivian transects, 26 qualify and 11 were
+visited once; no transect anywhere in the Indian Ocean subset was visited three
+or more times, so nothing is discarded at the top end.
+
+**Chagos contributes nothing, and is excluded by the data rather than by a
+special case.** Its 29 surveys are a single February 2015 expedition with no
+repeated transect, so the "exactly two visits" rule removes them without anyone
+naming Chagos in the selection code.
+
+**The inferential sample size is 26.** Seaview's Maldives component holds
+thousands of photo-quadrats, but quadrats within a transect are
+pseudo-replicates. Treating them as independent observations would inflate `n`
+by two orders of magnitude and is not done anywhere in this analysis.
+
+### 8a.2 The response, and why it is `pr_hard_coral`
+
+The response is the publisher's **survey-level `pr_hard_coral`**, and the
+paired change is
+
+```
+delta_hard_coral = second_pr_hard_coral - first_pr_hard_coral
+```
+
+with negative meaning decline. `absolute_change` and `relative_change` are also
+recorded, descriptively; relative change divides by the first visit's cover and
+the smallest denominator among these 26 pairs is 0.0532, so relative values for
+the lowest-cover transects are unstable and no test uses that column.
+
+Hard-coral cover is **not** reconstructed from the quadrat label columns. That
+is a direct consequence of §8.8: `seaviewsurvey_reefcover_indianocean.csv` omits
+the `MASE_MEA_L` (*Lobophyllia*, Hard Coral) column and under-reports hard coral
+for 2 513 of 137 698 Indian Ocean quadrats. The survey-level values do not show
+that shortfall. The analysis script therefore never opens the quadrat tables at
+all, which is pinned by a test.
+
+**The response is an image-derived estimate.** 98.33 % of Indian Ocean cover
+values are VGG-D 16 CNN output. It is not measured cover and it is not
+biological ground truth — a well-validated estimate is still an estimate, and
+the 97 % published classifier accuracy does not convert one into the other. No
+`reef_health`, `restoration_suitability`, bleached/not-bleached or
+healthy/unhealthy class is derived from it.
+
+### 8a.3 The survey dates — verified, not remembered
+
+Re-derived from `seaviewsurvey_surveys.csv` rather than carried over from
+earlier prose:
+
+| | Value |
+|---|---|
+| Repeat transects | 26 |
+| Earliest first survey | **2015-03-29** |
+| Latest second survey | **2017-04-01** |
+| Interval | 703–722 days (median 719) |
+| Epochs | Mar–Apr 2015, then Mar–Apr 2017 |
+
+These dates, and nothing else, determined the CRW acquisition window.
+
+### 8a.4 The CRW historical extension — a separate acquisition
+
+The CRW files already in the repository cover **2018-01-01 → 2024-12-31** for
+four **Indian** reef systems. That window does not reach the 2015–2017 surveys
+at all, so it was neither joined to them nor substituted for. Climatology was
+not substituted either. A separate historical subset was acquired instead.
+
+| | Existing acquisition | This acquisition |
+|---|---|---|
+| `dataset_id` | `noaa_crw_5km_v3_1` | `noaa_crw_5km_v3_1_maldives_seaview` |
+| Purpose | India-region environmental context | Maldives temporal-analysis support |
+| Geography | Lakshadweep, Gulf of Mannar, Gulf of Kutch, Andaman and Nicobar | One Maldives window |
+| Window | 2018-01-01 → 2024-12-31 | 2015-03-29 → 2017-04-01 |
+| Variables | SST, SST anomaly, HotSpot, DHW | HotSpot, DHW |
+| Files | 16 | 2 |
+
+The two manifests are separate files and the India one is **unmodified**. The
+scientific product, provider, DOI (`10.25921/6jgr-pt28`) and licence
+determination are identical; only the acquisition scope differs.
+
+**Availability was verified before any download**, from the NOAA PIFSC
+OceanWatch ERDDAP dataset metadata already used by this project:
+`CRW_hs_v1_0` declares `time_coverage_start` 1985-01-01 and `CRW_dhw_v1_0`
+declares 1985-03-25, both covering 2015–2017.
+
+**Source lineage is unchanged and is not restated more favourably here.** The
+requested window sits inside the NOAA reprocessed Geo-Polar Blended era and
+crosses the documented October 1–29, 2016 merge into the near-real-time
+analysis. It starts long after the project's conservative `2002-12-01` policy
+floor, which remains a **project policy** and not a NOAA licence boundary. As in
+§7.5.2, **no part of this acquisition may be described as "OSTIA-free"** — NOAA
+states the Geo-Polar Blended product switched to OSTIA for bias correction in
+2016, which overlaps this window. `scripts/fetch_noaa_crw_maldives.py` imports
+the same guard function rather than restating the rule.
+
+Only HotSpot and DHW were requested. SST and SST anomaly are omitted as
+unnecessary for the two pre-specified exposure metrics; adding a second,
+differently-baselined anomaly would have invited reporting whichever predictor
+correlated best.
+
+**What was acquired:**
+
+| Variable | Grid | Days | Size | SHA-256 (first 16) |
+|---|---|---|---|---|
+| `hotspot` | 43 × 22 cells @ 0.05° | 735 | 2 796 348 B | `8a3eef957ff67d3b` |
+| `degree_heating_week` | 43 × 22 cells @ 0.05° | 735 | 2 796 320 B | `9fd8e4bff7431c1c` |
+
+Delivered bbox 2.525–4.625 N, 72.625–73.675 E; zero missing dates; **0.0 % NaN**,
+so the whole window is valid ocean and no land mask is in play. Full hashes and
+provenance:
+`data/external/metadata/noaa_crw_5km_v3_1_maldives_seaview.manifest.json`.
+
+The bounding box was **derived, not chosen**: the minimal box containing every
+transect endpoint from both visits, buffered by 0.10° (two native cells) and
+snapped outward to the grid. The buffer exists so the nearest-valid-cell search
+cannot run off the subset edge. The four Indian windows were deliberately not
+reused. Raw files live under the git-ignored
+`data/external/raw/noaa_crw_5km_v3_1/maldives_seaview/` and the existing
+2018–2024 files were not overwritten.
+
+### 8a.5 Spatial matching
+
+Each transect gets one representative coordinate — the mean of all four
+endpoints across both visits — so a single CRW cell serves both visits. The
+furthest endpoint from that mean is 1.40 km across all 26 transects, well inside
+one cell.
+
+The rule is: **nearest valid CRW ocean grid-cell centre** by great-circle
+distance, where "valid" means the cell carries at least one finite value in
+**both** products. No interpolation, so no value is ever synthesised across a
+coast; and no silent walk to a farther cell, because the distance is recorded on
+every row. The maximum permitted match distance is **5 km**, one native cell
+width; a match beyond it would be reported unmatched rather than used.
+
+In practice the threshold never bound. All 26 transects matched, distances
+0.56–3.23 km (median 1.91), zero displaced by masking and zero unmatched.
+
+### 8a.6 Temporal exposure
+
+Exposure is defined **independently of the response**, before it is looked at:
+the closed interval from each pair's own first survey date to its own second
+survey date, on daily CRW records. No post-hoc event window was selected to
+bracket the observed decline, and no alternative window was tried.
+
+**No CRW observation dated after a pair's second survey enters that pair's
+exposure**, so no future thermal information leaks backwards. Survey dates are
+day-level integers and CRW is daily, so both sides align at day granularity; no
+survey time of day is published, and a survey is treated as occupying its whole
+date.
+
+One caveat recorded rather than corrected: DHW is a 12-week backward
+accumulation, so a DHW value dated shortly after a first survey partly
+accumulates heat from before it. Over 703–722-day intervals that touches only
+the first ~84 days and cannot import heat from after the second survey.
+
+Two pre-specified metrics, and no others:
+
+| Metric | Distribution across 26 transects |
+|---|---|
+| `max_dhw` (°C-weeks) | 5.69 – 7.64, median 6.28, SD 0.51 |
+| `max_hotspot` (°C) | 1.49 – 1.67, median 1.58, SD 0.06 |
+
+Zero missing days for either product on any pair. Peak DHW falls between
+2016-05-08 and 2016-05-16 for every transect; peak HotSpot between 2016-04-02
+and 2016-05-06 — the 2016 event, squarely inside the survey interval.
+
+### 8a.7 Association analysis and results
+
+Spearman rank correlation against `delta_hard_coral`, two-sided, n = 26. No
+multivariable model, no train/test split, no cross-validation: this is an
+observational association analysis, not an ML benchmark.
+
+**First, the paired change on its own** (before any exposure was loaded):
+
+| | Value |
+|---|---|
+| Pre `pr_hard_coral` | mean 0.181, median 0.155, range 0.053–0.531 |
+| Post `pr_hard_coral` | mean 0.130, median 0.113, range 0.018–0.243 |
+| Change | mean −0.051, median −0.023, SD 0.083, range −0.344 to +0.064 |
+| Direction | **22 declining, 4 increasing, 0 unchanged** |
+| Wilcoxon signed-rank | W = 44.0, **p = 0.00041** |
+| Effect size (rank-biserial) | −0.749 |
+| Median change, bootstrap 95 % CI | −0.061 to −0.011 |
+
+Shapiro-Wilk on the differences gives p = 0.00051, so the differences are not
+comfortably normal and the Wilcoxon test is the quoted one; the paired t-test
+(t = −3.16, p = 0.0041) is reported alongside it for transparency, not instead.
+No transect was removed as an outlier.
+
+**Then the association with thermal exposure:**
+
+| Predictor | ρ | p | Bootstrap 95 % CI | Holm-adjusted p |
+|---|---|---|---|---|
+| `max_dhw` | −0.118 | 0.566 | −0.515 to +0.326 | 1.000 |
+| `max_hotspot` | −0.076 | 0.710 | −0.443 to +0.325 | 1.000 |
+
+Both point estimates are negative — the direction the hypothesis predicts — but
+both intervals comfortably span zero. Bootstrap intervals use 10 000 resamples
+at a fixed seed (20260830). Raw p-values are the values of record; the Holm
+column covers the two pre-specified tests only, and no third test was run and
+discarded.
+
+The two predictors are correlated with each other (ρ = 0.478, p = 0.014), which
+is expected — DHW is by construction the accumulation of HotSpot values at or
+above 1 °C — so these are close to one result reported twice, and Holm is
+correspondingly conservative.
+
+**Leave-one-pair-out sensitivity.** For `max_dhw`, ρ ranges −0.216 to −0.038
+across the 26 refits and the sign never flips. For `max_hotspot`, ρ ranges
+−0.139 to +0.009, so dropping a single transect (37015) is enough to flip its
+sign — that predictor's near-zero estimate is not stable, and the fact is
+reported rather than tidied away.
+
+### 8a.8 Uncertainty, and how to read the null
+
+**The dominant limitation is restriction of range, not sample size alone.** All
+26 transects sit inside one Maldivian box roughly 0.9° across and share the same
+2016 thermal event. `max_hotspot` spans just 0.18 °C — 18 storage quanta, with
+11 tied ranks among 26 transects — so a rank test has very little to rank.
+`max_dhw` spans 1.95 °C-weeks with no ties, which is better but still narrow.
+
+So the honest reading is: **this design does not resolve an exposure-response
+gradient in either direction.** That is *not detected here*, which is a
+different claim from *not present*. A null across a narrow predictor range is
+evidence about this design, not evidence that thermal exposure and coral-cover
+change are unrelated in general. Widening the exposure contrast — more sites,
+more thermal regimes, or an event with more spatial variation — is what would
+make the question answerable, and the present data cannot substitute for it.
+
+### 8a.9 What this does and does not establish
+
+**Establishes.** Image-derived hard-coral cover on these 26 Maldivian transects
+was substantially lower in Mar–Apr 2017 than in Mar–Apr 2015, and the paired
+decline is large relative to its uncertainty. All 26 transects experienced
+substantial thermal exposure during the interval, peaking in April–May 2016.
+
+**Does not establish. NON-CAUSAL.** This is an association between a
+thermal-exposure predictor and a change in an estimate. It does not show that
+thermal stress caused mortality, and nothing here proves that bleaching caused
+the decline. There is no control, no bleaching observation, and no exclusion of
+storm damage, disease, predation, transect re-navigation or classifier
+variation. The allowed vocabulary is *associated with*, *correlated with*,
+*temporal contrast*, *thermal exposure*, *image-derived coral-cover change*,
+*consistent with* / *not consistent with*.
+
+**Does not touch the models.** No `reef_health` label, no
+`restoration_suitability` label, no threshold applied to any CRW value to make
+one. The registered **synthetic champion** models, `artifacts/mlruns.db` and
+`data/raw/observations.csv` are not read, modified or retrained by this
+analysis, and their hashes are unchanged by it. No DVC stage was added and the
+DAG is unchanged.
+
+**Is not Indian evidence.** `MALDIVES_NOT_INDIA`. The nearest Indian reef
+system, Lakshadweep, is roughly 400 km from the nearest transect. This analysis
+does not validate any model for Indian reefs.
+
+### 8a.10 Artifacts
+
+| Path | Contents |
+|---|---|
+| `scripts/fetch_noaa_crw_maldives.py` | Historical CRW acquisition, window derived from the surveys |
+| `scripts/analyze_seaview_maldives_pairs.py` | Pair construction, matching, exposure, association |
+| `reports/external/seaview_maldives_pairs.csv` | 26 rows, one per transect, with full match provenance |
+| `reports/external/seaview_maldives_pairs_summary.json` | Selection checks and paired-change analysis |
+| `reports/external/seaview_maldives_crw_association.json` | Matching, exposure, association, sensitivity |
+| `reports/figures/seaview_maldives_*.png` | Optional diagnostics (`--figures`; matplotlib not required) |
+
+Daily CRW values are not expanded into a tracked CSV; the pair-level table
+carries the CRW cell coordinates and file hashes needed to recompute them.
+
+---
+
 ## 9. Reproducing the acquisitions
 
 ```bash
@@ -1169,6 +1463,14 @@ python scripts/fetch_noaa_crw.py --validate-only    # re-validate local files
 python scripts/fetch_seaview.py --dry-run           # print the plan, fetch nothing
 python scripts/fetch_seaview.py                     # fetch tables, extract, write manifest
 python scripts/fetch_seaview.py --validate-only     # re-inspect local tables
+
+# §8a — the Maldives historical CRW extension and the paired analysis.
+# The fetch script derives its own window from the surveys, so fetch_seaview.py
+# must have run first; the analysis reads only local files and never networks.
+python scripts/fetch_noaa_crw_maldives.py --dry-run
+python scripts/fetch_noaa_crw_maldives.py
+python scripts/analyze_seaview_maldives_pairs.py
+python scripts/analyze_seaview_maldives_pairs.py --figures   # optional, needs matplotlib
 ```
 
 GEBCO is requested from the **THREDDS NetCDF Subset Service** hosted by CEDA on
@@ -1181,14 +1483,19 @@ ever downloaded.
 
 ## 10. What has NOT been done
 
-Each acquisition was done in isolation. Specifically **not** done:
+Each acquisition was done in isolation. **Amended 2026-08-30:** §8a joins
+Seaview survey records to the Maldives CRW extension, so the "no join" item
+below is now scoped rather than absolute. Everything else stands.
+
+Specifically **not** done:
 
 - No change to `generate_data.py`, `preprocess.py`, `build_features.py`,
   `get_feature_columns()`, or the Pandera schema
 - No external rows appended to `observations.csv`
-- **No join between GEBCO, CRW and Seaview**, and no join between any of them
-  and any other table. They remain three independent products
-- No site table, no training table, no new CSVs
+- **No join involving GEBCO**, and no join between the 2018–2024 India CRW
+  windows and anything else. The one join that exists is Seaview ↔ the Maldives
+  CRW extension, for the observational analysis in §8a and nothing else
+- No site table, no training table, no new CSVs beyond the 26-row §8a pair table
 - No labels created of any kind
 - No model trained, registered, promoted, or evaluated
 - No DVC stage added; the DAG is unchanged

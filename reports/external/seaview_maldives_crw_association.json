@@ -1,0 +1,428 @@
+{
+  "schema": "coralsense.analysis.seaview_maldives_crw_association/v1",
+  "provenance": {
+    "analysis_scope": "SEAVIEW_MALDIVES_REPEAT_TRANSECTS",
+    "geography": "MALDIVES_NOT_INDIA",
+    "generated_at_utc": "2026-08-30T04:21:10Z",
+    "generated_by": "scripts/analyze_seaview_maldives_pairs.py",
+    "biological_source": {
+      "dataset_id": "seaview_survey",
+      "table": "seaviewsurvey_surveys.csv",
+      "manifest": "data/external/metadata/seaview_survey.manifest.json",
+      "sha256": "d465b622f9a4927b64f0597ec6acf080d7f257b31a577168e29f2351341619e5"
+    },
+    "thermal_source": {
+      "dataset_id": "noaa_crw_5km_v3_1_maldives_seaview",
+      "manifest": "data/external/metadata/noaa_crw_5km_v3_1_maldives_seaview.manifest.json",
+      "manifest_sha256": "85f82eeb2501bbcfbdf29062a8ee0fd205de5864617d8486dc8cb64e2c73789b",
+      "files": {
+        "hotspot": {
+          "path": "data/external/raw/noaa_crw_5km_v3_1/maldives_seaview/noaa_crw_5km_v3_1_hotspot_maldives_seaview.nc",
+          "sha256": "8a3eef957ff67d3bcf4f49e107eb519035d22cfaf14d0a4f6a1a2c9d5bed6b0e",
+          "units": "degree_C",
+          "n_days": 735,
+          "date_range": [
+            "2015-03-29",
+            "2017-04-01"
+          ]
+        },
+        "dhw": {
+          "path": "data/external/raw/noaa_crw_5km_v3_1/maldives_seaview/noaa_crw_5km_v3_1_dhw_maldives_seaview.nc",
+          "sha256": "9fd8e4bff7431c1c444e4044c43e8acfa44362b3c192fd3d339c0b7dbb201654",
+          "units": "degree_Celsius_weeks",
+          "n_days": 735,
+          "date_range": [
+            "2015-03-29",
+            "2017-04-01"
+          ]
+        }
+      },
+      "note": "Separate from the 2018-2024 India-region CRW acquisition (data/external/metadata/noaa_crw_5km_v3_1.manifest.json), which this analysis does not read and does not modify."
+    }
+  },
+  "spatial_matching": {
+    "rule": "Nearest valid CRW ocean grid-cell centre by great-circle distance, where a cell is valid if it carries at least one finite value in BOTH acquired products across the window. No interpolation. No land crossing.",
+    "max_match_distance_km": 5.0,
+    "max_match_distance_rationale": "One native cell width. 0.05 deg is ~5.55 km at this latitude, and the nearest cell centre to an arbitrary point inside a valid grid is at most half a cell diagonal (~3.9 km) away, so the threshold binds only where masking displaces the match.",
+    "survey_coordinate_rule": "Mean of all four transect endpoints across both visits, giving one location per transect so both visits share a CRW cell. coord_spread_km on each row is the distance from that mean to its furthest endpoint.",
+    "grid_resolution_deg": 0.05,
+    "n_matched": 26,
+    "n_unmatched": 0,
+    "unmatched": [],
+    "n_displaced_by_masking": 0,
+    "match_distance_km": {
+      "n": 26,
+      "mean": 2.027979806100803,
+      "median": 1.9094677079144962,
+      "sd": 0.7749918940964453,
+      "min": 0.560354873703783,
+      "q1": 1.7353500824296235,
+      "q3": 2.590442189040247,
+      "iqr": 0.8550921066106234,
+      "max": 3.2264676695783785
+    },
+    "coord_spread_km": {
+      "n": 26,
+      "mean": 0.8568279761392864,
+      "median": 0.8809070997686439,
+      "sd": 0.3030430033649587,
+      "min": 0.28339783971070936,
+      "q1": 0.6960156189575736,
+      "q3": 1.0571871895941054,
+      "iqr": 0.3611715706365318,
+      "max": 1.396371344920056
+    }
+  },
+  "temporal_exposure": {
+    "rule": "Closed interval from each pair's own first survey date to its own second survey date, inclusive, on daily CRW records.",
+    "defined_independently_of_response": true,
+    "no_post_hoc_event_window": "The interval is the observed survey spacing. No window was chosen to bracket the observed decline, and no alternative window was tried.",
+    "future_information_excluded": "No CRW observation dated after a pair's second survey enters that pair's exposure.",
+    "backward_reach_caveat": "DHW is a 12-week backward accumulation, so a DHW value dated shortly after the first survey partly accumulates heat from before it. Over intervals of 703-722 days this affects only the first ~84 days of each series and cannot import heat from after the second survey. Recorded, not corrected.",
+    "date_precision": "Survey dates are day-level integers (YYYYMMDD) in the publisher's table, and CRW is daily, so both sides align at day granularity with no interpolation. No survey time of day is published; a survey is treated as occupying its whole date, which is the least-assumptive reading.",
+    "metrics": {
+      "max_dhw": "maximum Degree Heating Week over the interval, degree_Celsius_weeks",
+      "max_hotspot": "maximum Coral Bleaching HotSpot over the interval, degree_C",
+      "secondary_metrics": "None. Two pre-specified metrics only; a larger family would permit selecting whichever correlates best."
+    },
+    "exposure_distributions": {
+      "max_dhw": {
+        "n": 26,
+        "mean": 6.3869230563823995,
+        "median": 6.2799999713897705,
+        "sd": 0.511716860472526,
+        "min": 5.690000057220459,
+        "q1": 5.9999998807907104,
+        "q3": 6.697499990463257,
+        "iqr": 0.6975001096725464,
+        "max": 7.639999866485596
+      },
+      "max_hotspot": {
+        "n": 26,
+        "mean": 1.5799999924806447,
+        "median": 1.5800000429153442,
+        "sd": 0.05851495170257604,
+        "min": 1.4900000095367432,
+        "q1": 1.5274999737739563,
+        "q3": 1.6299999952316284,
+        "iqr": 0.10250002145767212,
+        "max": 1.6699999570846558
+      }
+    },
+    "missing_day_fraction": {
+      "max_dhw": 0.0,
+      "max_hotspot": 0.0
+    },
+    "date_of_max_dhw_range": [
+      "2016-05-08",
+      "2016-05-16"
+    ],
+    "date_of_max_hotspot_range": [
+      "2016-04-02",
+      "2016-05-06"
+    ]
+  },
+  "association": {
+    "question": "Is greater thermal exposure between the two visits ASSOCIATED with a larger decline in the image-derived hard-coral-cover estimate across the 26 repeated Maldivian transects?",
+    "design": "observational, paired, cross-sectional in the change",
+    "response": {
+      "name": "delta_hard_coral",
+      "definition": "second_pr_hard_coral - first_pr_hard_coral",
+      "sign": "negative = decline in image-derived hard-coral cover"
+    },
+    "primary_predictors": [
+      "max_dhw",
+      "max_hotspot"
+    ],
+    "primary_test": "Spearman rank correlation, two-sided",
+    "n_analysed": 26,
+    "exposure_contrast": {
+      "max_dhw": {
+        "min": 5.690000057220459,
+        "max": 7.639999866485596,
+        "range": 1.9499998092651367,
+        "sd": 0.511716860472526,
+        "coefficient_of_variation": 0.08011946534429776,
+        "n_distinct_values": 26,
+        "n_transects": 26,
+        "storage_quantum": 0.01,
+        "range_in_quanta": 195,
+        "n_tied_ranks": 0
+      },
+      "max_hotspot": {
+        "min": 1.4900000095367432,
+        "max": 1.6699999570846558,
+        "range": 0.1799999475479126,
+        "sd": 0.05851495170257604,
+        "coefficient_of_variation": 0.03703477973484412,
+        "n_distinct_values": 15,
+        "n_transects": 26,
+        "storage_quantum": 0.01,
+        "range_in_quanta": 18,
+        "n_tied_ranks": 11
+      },
+      "why_this_matters": "All 26 transects lie within one Maldivian box roughly 0.9 deg across and were exposed to the same 2016 thermal event, so the design carries little exposure contrast. Read the ranges above before reading any null result below: a weak correlation across a narrow predictor range is evidence about THIS design, not evidence that thermal exposure and coral-cover change are unrelated in general."
+    },
+    "tests": {
+      "max_dhw": {
+        "n": 26,
+        "rho": -0.11794871794871793,
+        "p_value": 0.5660670320654287,
+        "bootstrap_ci_95": [
+          -0.5146150199516271,
+          0.3262364463366822
+        ],
+        "bootstrap_resamples_used": 10000,
+        "fisher_z_ci_95": [
+          -0.49257091233356093,
+          0.293551820683903
+        ],
+        "random_seed": 20260830
+      },
+      "max_hotspot": {
+        "n": 26,
+        "rho": -0.07646183682173671,
+        "p_value": 0.7104514218779369,
+        "bootstrap_ci_95": [
+          -0.44330127460398744,
+          0.32509237341033315
+        ],
+        "bootstrap_resamples_used": 10000,
+        "fisher_z_ci_95": [
+          -0.4601962752310298,
+          0.33134424336706136
+        ],
+        "random_seed": 20260830
+      }
+    },
+    "holm_adjusted_p_values": {
+      "max_dhw": 1.0,
+      "max_hotspot": 1.0
+    },
+    "multiple_testing": {
+      "n_pre_specified_tests": 2,
+      "method": "Holm-Bonferroni across the two pre-specified primary tests only",
+      "note": "Raw p-values are reported above and are the values of record. The adjustment is offered for completeness across the two pre-specified tests; no additional test was run and discarded."
+    },
+    "predictor_collinearity": {
+      "spearman_rho_dhw_vs_hotspot": 0.4776293214918352,
+      "p_value": 0.013600859365016323,
+      "note": "DHW is by construction the running 12-week accumulation of HotSpot values at or above 1 degC, so the two are not independent tests of separate hypotheses. A high correlation here means the two results are close to one result reported twice, and the Holm adjustment above is correspondingly conservative."
+    },
+    "sensitivity_leave_one_pair_out": {
+      "max_dhw": {
+        "rho_full": -0.11794871794871793,
+        "rho_min": -0.21615384615384614,
+        "rho_max": -0.03846153846153846,
+        "rho_range": 0.17769230769230768,
+        "most_influential_transect_id": 37027,
+        "rho_without_most_influential": -0.21615384615384614,
+        "shift_from_most_influential": -0.09820512820512821,
+        "sign_stable": true,
+        "dominated_by_one_pair": false
+      },
+      "max_hotspot": {
+        "rho_full": -0.07646183682173671,
+        "rho_min": -0.1388358317758818,
+        "rho_max": 0.008870067030125781,
+        "rho_range": 0.14770589880600757,
+        "most_influential_transect_id": 37015,
+        "rho_without_most_influential": 0.008870067030125781,
+        "shift_from_most_influential": 0.0853319038518625,
+        "sign_stable": false,
+        "dominated_by_one_pair": true
+      }
+    },
+    "interpretation": {
+      "any_test_significant_at_0_05": false,
+      "per_predictor": {
+        "max_dhw": {
+          "rho_sign": "negative",
+          "direction_relative_to_hypothesis": "same direction as the hypothesis (more exposure, more decline)",
+          "ci_excludes_zero": false
+        },
+        "max_hotspot": {
+          "rho_sign": "negative",
+          "direction_relative_to_hypothesis": "same direction as the hypothesis (more exposure, more decline)",
+          "ci_excludes_zero": false
+        }
+      },
+      "reading": "Read the effect sizes and intervals, not the p-values. A confidence interval spanning zero on n = 26 across a narrow exposure range means the data do not resolve the association in either direction. That is 'not detected here', which is not the same claim as 'not present'.",
+      "what_a_null_here_does_not_mean": "It does not mean thermal stress is unrelated to coral-cover change. It means this design \u2014 26 transects in one small area, all exposed to the same 2016 event, with an image-derived response \u2014 does not resolve a difference between them. See exposure_contrast above."
+    },
+    "not_performed": {
+      "multivariable_model": "n = 26 does not support one",
+      "train_test_split": "not an ML benchmark",
+      "cross_validation": "not an ML benchmark",
+      "causal_attribution": "the design does not support it",
+      "outlier_removal": "none; influence is reported instead"
+    },
+    "scatter_data": [
+      {
+        "transect_id": 37001,
+        "delta_hard_coral": -0.1223,
+        "max_dhw": 6.360000133514404,
+        "max_hotspot": 1.6100000143051147
+      },
+      {
+        "transect_id": 37002,
+        "delta_hard_coral": -0.1698,
+        "max_dhw": 7.079999923706055,
+        "max_hotspot": 1.649999976158142
+      },
+      {
+        "transect_id": 37003,
+        "delta_hard_coral": -0.011399999999999993,
+        "max_dhw": 6.420000076293945,
+        "max_hotspot": 1.659999966621399
+      },
+      {
+        "transect_id": 37004,
+        "delta_hard_coral": -0.0766,
+        "max_dhw": 6.059999942779541,
+        "max_hotspot": 1.5199999809265137
+      },
+      {
+        "transect_id": 37006,
+        "delta_hard_coral": -0.009999999999999981,
+        "max_dhw": 5.989999771118164,
+        "max_hotspot": 1.5800000429153442
+      },
+      {
+        "transect_id": 37007,
+        "delta_hard_coral": 0.005699999999999983,
+        "max_dhw": 5.690000057220459,
+        "max_hotspot": 1.5800000429153442
+      },
+      {
+        "transect_id": 37008,
+        "delta_hard_coral": -0.056999999999999995,
+        "max_dhw": 5.96999979019165,
+        "max_hotspot": 1.5
+      },
+      {
+        "transect_id": 37009,
+        "delta_hard_coral": -0.0786,
+        "max_dhw": 6.130000114440918,
+        "max_hotspot": 1.4900000095367432
+      },
+      {
+        "transect_id": 37010,
+        "delta_hard_coral": -0.013600000000000001,
+        "max_dhw": 6.179999828338623,
+        "max_hotspot": 1.4900000095367432
+      },
+      {
+        "transect_id": 37011,
+        "delta_hard_coral": 0.06439999999999999,
+        "max_dhw": 5.889999866485596,
+        "max_hotspot": 1.5499999523162842
+      },
+      {
+        "transect_id": 37014,
+        "delta_hard_coral": -0.030299999999999994,
+        "max_dhw": 7.25,
+        "max_hotspot": 1.600000023841858
+      },
+      {
+        "transect_id": 37015,
+        "delta_hard_coral": 0.014700000000000005,
+        "max_dhw": 6.730000019073486,
+        "max_hotspot": 1.4900000095367432
+      },
+      {
+        "transect_id": 37020,
+        "delta_hard_coral": -0.06540000000000001,
+        "max_dhw": 6.769999980926514,
+        "max_hotspot": 1.6699999570846558
+      },
+      {
+        "transect_id": 37021,
+        "delta_hard_coral": -0.0567,
+        "max_dhw": 6.929999828338623,
+        "max_hotspot": 1.6200000047683716
+      },
+      {
+        "transect_id": 37022,
+        "delta_hard_coral": -0.1222,
+        "max_dhw": 7.639999866485596,
+        "max_hotspot": 1.659999966621399
+      },
+      {
+        "transect_id": 37027,
+        "delta_hard_coral": 0.039599999999999996,
+        "max_dhw": 7.090000152587891,
+        "max_hotspot": 1.6299999952316284
+      },
+      {
+        "transect_id": 37028,
+        "delta_hard_coral": -0.0007000000000000062,
+        "max_dhw": 6.519999980926514,
+        "max_hotspot": 1.6299999952316284
+      },
+      {
+        "transect_id": 37029,
+        "delta_hard_coral": -0.16849999999999998,
+        "max_dhw": 5.710000038146973,
+        "max_hotspot": 1.600000023841858
+      },
+      {
+        "transect_id": 37030,
+        "delta_hard_coral": -0.34440000000000004,
+        "max_dhw": 6.570000171661377,
+        "max_hotspot": 1.559999942779541
+      },
+      {
+        "transect_id": 37031,
+        "delta_hard_coral": -0.016100000000000003,
+        "max_dhw": 6.599999904632568,
+        "max_hotspot": 1.5800000429153442
+      },
+      {
+        "transect_id": 37032,
+        "delta_hard_coral": -0.0058,
+        "max_dhw": 6.170000076293945,
+        "max_hotspot": 1.5499999523162842
+      },
+      {
+        "transect_id": 37033,
+        "delta_hard_coral": -0.032899999999999985,
+        "max_dhw": 5.730000019073486,
+        "max_hotspot": 1.5199999809265137
+      },
+      {
+        "transect_id": 37035,
+        "delta_hard_coral": -0.0157,
+        "max_dhw": 6.199999809265137,
+        "max_hotspot": 1.5099999904632568
+      },
+      {
+        "transect_id": 37037,
+        "delta_hard_coral": -0.047700000000000006,
+        "max_dhw": 5.920000076293945,
+        "max_hotspot": 1.559999942779541
+      },
+      {
+        "transect_id": 37038,
+        "delta_hard_coral": -0.0020000000000000018,
+        "max_dhw": 6.429999828338623,
+        "max_hotspot": 1.6399999856948853
+      },
+      {
+        "transect_id": 37039,
+        "delta_hard_coral": -0.011900000000000008,
+        "max_dhw": 6.03000020980835,
+        "max_hotspot": 1.6299999952316284
+      }
+    ]
+  },
+  "limitations": {
+    "causal": "NON-CAUSAL. This is an association between a thermal-exposure predictor and a change in an image-derived cover estimate. It does not establish that thermal stress caused the change, and the words caused, bleaching caused the decline, thermal stress caused mortality and proves do not apply to it. There is no control, no bleaching observation, and no exclusion of storm damage, disease, predation, transect re-navigation or classifier variation.",
+    "geography": "MALDIVES_NOT_INDIA. All 26 transects are Maldivian. No Indian reef is involved, no Indian model is validated, and nothing here is Indian data. The nearest Indian reef system, Lakshadweep, is roughly 400 km from the nearest transect.",
+    "response_is_estimated": "pr_hard_coral is a classifier output, not measured cover and not ground truth. The published 97 % classifier validation is real and a well-validated estimate is still an estimate.",
+    "sample_size": "n = 26 transects. Photo-quadrats within a transect are pseudo-replicates and are not used as independent observations. Confidence intervals at this size are wide and the effect sizes, not the p-values, carry the result.",
+    "restricted_exposure_range": "All 26 transects sit inside one Maldivian box roughly 0.9 deg across and share the same 2016 thermal event, so between-transect exposure barely varies. The design therefore has little power to detect an exposure-response gradient, and a weak correlation is as consistent with 'no contrast to measure' as with 'no relationship'. See association.exposure_contrast for the actual ranges.",
+    "no_labels_created": "No reef_health class, no restoration_suitability class, no bleached/not-bleached class, no healthy/unhealthy class. CRW values were not thresholded into any reef-condition label.",
+    "registered_models_untouched": "The registered synthetic champions, artifacts/mlruns.db and data/raw/observations.csv are not read, modified or retrained by this analysis."
+  }
+}

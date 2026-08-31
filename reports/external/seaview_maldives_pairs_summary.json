@@ -1,0 +1,187 @@
+{
+  "schema": "coralsense.analysis.seaview_maldives_pairs/v1",
+  "provenance": {
+    "analysis_scope": "SEAVIEW_MALDIVES_REPEAT_TRANSECTS",
+    "geography": "MALDIVES_NOT_INDIA",
+    "generated_at_utc": "2026-08-30T04:21:10Z",
+    "generated_by": "scripts/analyze_seaview_maldives_pairs.py",
+    "biological_source": {
+      "dataset_id": "seaview_survey",
+      "table": "seaviewsurvey_surveys.csv",
+      "manifest": "data/external/metadata/seaview_survey.manifest.json",
+      "sha256": "d465b622f9a4927b64f0597ec6acf080d7f257b31a577168e29f2351341619e5"
+    },
+    "thermal_source": {
+      "dataset_id": "noaa_crw_5km_v3_1_maldives_seaview",
+      "manifest": "data/external/metadata/noaa_crw_5km_v3_1_maldives_seaview.manifest.json",
+      "manifest_sha256": "85f82eeb2501bbcfbdf29062a8ee0fd205de5864617d8486dc8cb64e2c73789b",
+      "files": {
+        "hotspot": {
+          "path": "data/external/raw/noaa_crw_5km_v3_1/maldives_seaview/noaa_crw_5km_v3_1_hotspot_maldives_seaview.nc",
+          "sha256": "8a3eef957ff67d3bcf4f49e107eb519035d22cfaf14d0a4f6a1a2c9d5bed6b0e",
+          "units": "degree_C",
+          "n_days": 735,
+          "date_range": [
+            "2015-03-29",
+            "2017-04-01"
+          ]
+        },
+        "dhw": {
+          "path": "data/external/raw/noaa_crw_5km_v3_1/maldives_seaview/noaa_crw_5km_v3_1_dhw_maldives_seaview.nc",
+          "sha256": "9fd8e4bff7431c1c444e4044c43e8acfa44362b3c192fd3d339c0b7dbb201654",
+          "units": "degree_Celsius_weeks",
+          "n_days": 735,
+          "date_range": [
+            "2015-03-29",
+            "2017-04-01"
+          ]
+        }
+      },
+      "note": "Separate from the 2018-2024 India-region CRW acquisition (data/external/metadata/noaa_crw_5km_v3_1.manifest.json), which this analysis does not read and does not modify."
+    }
+  },
+  "pair_selection": {
+    "n_pairs": 26,
+    "n_pairs_is_26": true,
+    "each_transect_once": true,
+    "all_survey_ids_distinct": true,
+    "maldives_only": true,
+    "chagos_repeat_transects": 0,
+    "chagos_surveys": 29,
+    "first_before_second": true,
+    "response_column": "pr_hard_coral",
+    "response_complete": true,
+    "interval_days_min": 703,
+    "interval_days_max": 722,
+    "max_coord_spread_km": 1.396371344920056,
+    "earliest_first_survey": "2015-03-29",
+    "latest_second_survey": "2017-04-01",
+    "excluded_maldives_single_visit_transects": 11,
+    "transects_visited_three_or_more_times": 0
+  },
+  "paired_change": {
+    "n_pairs": 26,
+    "response": {
+      "column": "pr_hard_coral",
+      "source_table": "seaviewsurvey_surveys.csv",
+      "level": "survey (transect visit)",
+      "nature": "image-derived hard-coral-cover estimate; 98.33 % of Indian Ocean cover values are VGG-D 16 CNN output, not diver observation",
+      "units": "proportion of classified points, 0-1",
+      "reconstructed_from_quadrats": false,
+      "why_not_reconstructed": "seaviewsurvey_reefcover_indianocean.csv omits the MASE_MEA_L (Lobophyllia, Hard Coral) column and under-reports hard coral for 2 513 of 137 698 quadrats (1.83 %). See docs/external_data.md section 8.8."
+    },
+    "pre_distribution": {
+      "n": 26,
+      "mean": 0.1811076923076923,
+      "median": 0.15525,
+      "sd": 0.09307086729187355,
+      "min": 0.0532,
+      "q1": 0.130475,
+      "q3": 0.2217,
+      "iqr": 0.091225,
+      "max": 0.5311
+    },
+    "post_distribution": {
+      "n": 26,
+      "mean": 0.12975384615384616,
+      "median": 0.1132,
+      "sd": 0.06025504613404079,
+      "min": 0.0183,
+      "q1": 0.08745,
+      "q3": 0.18055,
+      "iqr": 0.09309999999999999,
+      "max": 0.2425
+    },
+    "delta_distribution": {
+      "n": 26,
+      "mean": -0.05135384615384615,
+      "median": -0.0232,
+      "sd": 0.08277317068117776,
+      "min": -0.34440000000000004,
+      "q1": -0.0738,
+      "q3": -0.006849999999999995,
+      "iqr": 0.06695000000000001,
+      "max": 0.06439999999999999
+    },
+    "absolute_change_distribution": {
+      "n": 26,
+      "mean": 0.06092307692307693,
+      "median": 0.03624999999999999,
+      "sd": 0.07572329790859512,
+      "min": 0.0007000000000000062,
+      "q1": 0.012325000000000006,
+      "q3": 0.0738,
+      "iqr": 0.061475,
+      "max": 0.34440000000000004
+    },
+    "relative_change_distribution": {
+      "n": 26,
+      "mean": -0.22030827736230238,
+      "median": -0.13661873256862453,
+      "sd": 0.3156179028167821,
+      "min": -0.8698435277382646,
+      "q1": -0.42459996096587593,
+      "q3": -0.051872410743378464,
+      "iqr": 0.3727275502224975,
+      "max": 0.4423076923076922
+    },
+    "relative_change_caveat": {
+      "min_first_pr_hard_coral": 0.0532,
+      "note": "Relative change divides by the first visit's cover. The smallest denominator in these 26 pairs is reported above; relative values for the lowest-cover transects are correspondingly unstable. Descriptive only \u2014 no test uses this column."
+    },
+    "direction": {
+      "declining": 22,
+      "increasing": 4,
+      "unchanged": 0
+    },
+    "outliers_removed": 0,
+    "outlier_policy": "None removed. Extreme changes are retained; section 13's leave-one-pair-out check reports whether any single transect drives the association instead.",
+    "interval_days": {
+      "n": 26,
+      "mean": 718.6153846153846,
+      "median": 719.0,
+      "sd": 3.8478765372805097,
+      "min": 703.0,
+      "q1": 717.0,
+      "q3": 721.0,
+      "iqr": 4.0,
+      "max": 722.0
+    },
+    "normality_check": {
+      "test": "Shapiro-Wilk on the 26 paired differences",
+      "statistic": 0.8262864002335724,
+      "p_value": 0.0005103004762902183,
+      "normal_at_0_05": false,
+      "consequence": "The paired differences are not comfortably normal, so the Wilcoxon signed-rank test is the quoted paired test. The paired t-test is reported alongside it for transparency, not as the primary result."
+    },
+    "paired_test": {
+      "primary": "Wilcoxon signed-rank (two-sided), second visit vs first visit",
+      "wilcoxon_statistic": 44.0,
+      "wilcoxon_p_value": 0.00041159987449645996,
+      "secondary_paired_t_statistic": -3.163516166912376,
+      "secondary_paired_t_p_value": 0.0040629130046602934,
+      "effect_size_rank_biserial": -0.7492877492877493,
+      "median_change_bootstrap_ci_95": [
+        -0.06105000000000001,
+        -0.010949999999999994
+      ],
+      "mean_change_bootstrap_ci_95": [
+        -0.0846889423076923,
+        -0.022949711538461544
+      ],
+      "bootstrap_resamples": 10000,
+      "random_seed": 20260830,
+      "interpretation_limit": "A paired difference in an image-derived cover estimate between two visits two years apart. It does not establish a cause. Storm damage, disease, predation, transect re-navigation and classifier variation are not excluded by this design."
+    }
+  },
+  "pair_table": "reports/external/seaview_maldives_pairs.csv",
+  "limitations": {
+    "causal": "NON-CAUSAL. This is an association between a thermal-exposure predictor and a change in an image-derived cover estimate. It does not establish that thermal stress caused the change, and the words caused, bleaching caused the decline, thermal stress caused mortality and proves do not apply to it. There is no control, no bleaching observation, and no exclusion of storm damage, disease, predation, transect re-navigation or classifier variation.",
+    "geography": "MALDIVES_NOT_INDIA. All 26 transects are Maldivian. No Indian reef is involved, no Indian model is validated, and nothing here is Indian data. The nearest Indian reef system, Lakshadweep, is roughly 400 km from the nearest transect.",
+    "response_is_estimated": "pr_hard_coral is a classifier output, not measured cover and not ground truth. The published 97 % classifier validation is real and a well-validated estimate is still an estimate.",
+    "sample_size": "n = 26 transects. Photo-quadrats within a transect are pseudo-replicates and are not used as independent observations. Confidence intervals at this size are wide and the effect sizes, not the p-values, carry the result.",
+    "restricted_exposure_range": "All 26 transects sit inside one Maldivian box roughly 0.9 deg across and share the same 2016 thermal event, so between-transect exposure barely varies. The design therefore has little power to detect an exposure-response gradient, and a weak correlation is as consistent with 'no contrast to measure' as with 'no relationship'. See association.exposure_contrast for the actual ranges.",
+    "no_labels_created": "No reef_health class, no restoration_suitability class, no bleached/not-bleached class, no healthy/unhealthy class. CRW values were not thresholded into any reef-condition label.",
+    "registered_models_untouched": "The registered synthetic champions, artifacts/mlruns.db and data/raw/observations.csv are not read, modified or retrained by this analysis."
+  }
+}

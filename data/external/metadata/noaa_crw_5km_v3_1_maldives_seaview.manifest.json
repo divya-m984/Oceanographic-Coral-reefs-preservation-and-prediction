@@ -1,0 +1,310 @@
+{
+  "schema": "coralsense.external.manifest/v1",
+  "dataset_id": "noaa_crw_5km_v3_1_maldives_seaview",
+  "analysis_scope": "SEAVIEW_MALDIVES_REPEAT_TRANSECTS",
+  "relationship_to_existing_acquisitions": {
+    "same_product_as": "noaa_crw_5km_v3_1",
+    "same_product_note": "Scientifically the identical NOAA CRW 5 km v3.1 suite, from the same NOAA ERDDAP endpoint, under the same licence determination. Only the acquisition scope differs.",
+    "existing_acquisition": {
+      "dataset_id": "noaa_crw_5km_v3_1",
+      "manifest": "data/external/metadata/noaa_crw_5km_v3_1.manifest.json",
+      "purpose": "India-region environmental context",
+      "geography": "Lakshadweep, Gulf of Mannar, Gulf of Kutch, Andaman and Nicobar Islands",
+      "window": "2018-01-01 to 2024-12-31",
+      "variables": [
+        "sst",
+        "sst_anomaly",
+        "hotspot",
+        "dhw"
+      ],
+      "modified_by_this_acquisition": false
+    },
+    "this_acquisition": {
+      "dataset_id": "noaa_crw_5km_v3_1_maldives_seaview",
+      "purpose": "Maldives Seaview temporal-analysis support, historical period",
+      "geography": "One Maldives window covering the 26 repeated Seaview transects",
+      "window": "2015-03-29 to 2017-04-01",
+      "variables": [
+        "hotspot",
+        "dhw"
+      ]
+    },
+    "geographic_warning": "MALDIVES_NOT_INDIA. These two acquisitions describe different countries. Files under data/external/raw/noaa_crw_5km_v3_1/maldives_seaview/ are Maldivian and must never be presented as Indian data, nor pooled with the India windows."
+  },
+  "source": {
+    "dataset_id": "noaa_crw_5km_v3_1_maldives_seaview",
+    "source_name": "NOAA Coral Reef Watch (NOAA/NESDIS/STAR)",
+    "product_name": "NOAA Coral Reef Watch Daily Global 5km (0.05 degree) Satellite Coral Bleaching Heat Stress Monitoring Product Suite",
+    "source_url": "https://coralreefwatch.noaa.gov/product/5km/index.php",
+    "version": "v3.1 (released 2018-08-01)",
+    "licence_name": "US Government public domain, attribution requested (NOAA Coral Reef Watch). Basis: NOAA CRW's published terms plus the licence metadata delivered inside the acquired files. Separately, and NOT as the basis for this determination, the project declines to acquire dates before 2002-12-01, keeping clear of the period where the restrictively licensed Met Office OSTIA reanalysis contributes directly to CoralTemp and of the November 1-29, 2002 merge window.",
+    "licence_url": "https://coralreefwatch.noaa.gov/satellite/docs/recommendations_crw_citation.php",
+    "citation": "Liu, Gang; Heron, Scott F.; Eakin, C. Mark; De La Cour, Jacqueline L.; Geiger, Erick F.; Tirak, Kyle V.; Skirving, William J.; Strong, Alan E. (2018). NOAA Coral Reef Watch (CRW) Daily Global 5-km (0.05 degree) Satellite Coral Bleaching Heat Stress Monitoring Product Suite. [Subset used: Coral Bleaching HotSpot and Degree Heating Week, 2015-03-29 to 2017-04-01, for a single Maldives window covering the 26 repeated Seaview transects]. NOAA National Centers for Environmental Information. Dataset. https://doi.org/10.25921/6jgr-pt28. Accessed 2026-08-30.",
+    "observation_type": "derived",
+    "processing_level": "L4",
+    "original_format": "NetCDF-3 classic (server-side subset of a NetCDF-4 source)",
+    "original_crs": "EPSG:4326 (WGS 84 geographic), equirectangular, grid-cell centres",
+    "spatial_resolution": "0.05 degrees (~5 km)",
+    "temporal_resolution": "daily",
+    "geographic_scope": "Source product is global. This acquisition is ONE window in the MALDIVES: lat 2.55 to 4.65, lon 72.6 to 73.7. It contains no Indian reef system and is roughly 400 km from Lakshadweep, the nearest. It must not be described as Indian data, and it does not overlap the four Indian windows of the noaa_crw_5km_v3_1 acquisition.",
+    "temporal_scope": "Source product spans 1985-01-01 to present. Acquired window: 2015-03-29 to 2017-04-01, derived from the Seaview repeat surveys. Disjoint from, and earlier than, the 2018-01-01 to 2024-12-31 window of the India acquisition; neither replaces the other.",
+    "retrieved_at_utc": "2026-08-30T03:54:08Z",
+    "access_method": "ERDDAP griddap server-side subsetting. Bulk retrieval from the NOAA PIFSC OceanWatch ERDDAP at https://oceanwatch.pifsc.noaa.gov/erddap/griddap; values cross-verified against the NOAA CoastWatch ERDDAP at https://coastwatch.noaa.gov/erddap/griddap. Both are NOAA-operated; no third-party mirror was used.",
+    "doi": "10.25921/6jgr-pt28",
+    "product_identifier": "gov.noaa.nodc:CRW-5km-HeatStressProducts",
+    "sensor_type": "Composite. SST inputs: AVHRR, VIIRS, GOES Imager, MTSAT Imager, AHI, ABI, SEVIRI, ATSR series, plus moored/drifting/TAO buoys and ship intake. HotSpot, SST Anomaly and DHW are computed from the resulting CoralTemp v3.1 SST analysis and are not separately sensed.",
+    "vertical_crs": null,
+    "variable_units": {
+      "coral_bleaching_hotspot_c": "degree_C",
+      "degree_heating_week": "degree_Celsius_weeks"
+    },
+    "licence_verified": true,
+    "licence_verified_via": "Verified 2026-08-20 from first-party NOAA sources. (1) NOAA Coral Reef Watch's own disclaimer and citation page states: 'NOAA Coral Reef Watch (CRW) data posted on the internet are freely available to the public. All content on this website is considered to be in the public domain and may be distributed freely. We rely on the ethics and integrity of the user to ensure that the source of data and products is appropriately cited and credited.' (2) The 'license' global attribute delivered inside the NetCDF files themselves repeats the CRW statement that the data 'are available for use without restriction' with credit requested. (3) For CoralTemp SST specifically, that same attribute additionally carries an OSTIA Usage Statement and a GHRSST statement ('free and open'), reflecting CoralTemp's multi-source lineage. The determination above rests on (1) and (2) -- NOAA CRW's own publication terms for the product it distributes, and the licence metadata delivered with the files -- and is NOT inferred from the acquisition window's position in that lineage. SOURCE LINEAGE, recorded separately for provenance and re-verified 2026-08-22 against NOAA's CoralTemp source-history page (coralreefwatch.noaa.gov/product/5km/index_5km_sst.php): OSTIA reanalysis contributes directly January 1985 to November 2002; 'The OSTIA reanalysis and NOAA's reprocessed 5km Geo-Polar Blended SST dataset were linearly merged over a period of 29 days, from November 1-29, 2002'; NOAA reprocessed Geo-Polar Blended is the primary analysis from November 2002 to October 2016; a second 29-day merge runs October 1-29, 2016; NOAA operational near-real-time Geo-Polar Blended is primary from October 2016 onward. OSTIA does NOT drop out of the later record: NOAA states 'Bias corrections originally used the NOAA National Centers for Environmental Prediction (NCEP) real-time global SST. However, in 2016, the NOAA 5km Geo-Polar Blended SST product (which CRW's 5km satellite monitoring for coral reefs is based on) switched to using OSTIA as the bias correction.' The acquired 2018-2024 window therefore rests on a product that uses OSTIA as a bias-correction input, and must not be described as OSTIA-free. scripts/fetch_noaa_crw.py enforces a conservative project-policy floor of 2002-12-01 -- excluding the direct-OSTIA period and the 2002 linear-merge window only -- which is a provenance policy, not a licence boundary and not a source-purity claim. HISTORICAL EXTENSION, verified 2026-08-30: the requested window (2015-03-29 to 2017-04-01) lies inside the NOAA reprocessed Geo-Polar Blended era and crosses the documented October 1-29, 2016 merge between the reprocessed and near-real-time analyses, which is recorded here and is NOT treated as a licence boundary. It starts well after the project's conservative 2002-12-01 policy floor. Availability was verified before any download against the NOAA PIFSC OceanWatch ERDDAP dataset metadata: CRW_hs_v1_0 declares time_coverage_start 1985-01-01T12:00:00Z and CRW_dhw_v1_0 declares 1985-03-25T12:00:00Z, both covering the requested range. As with the India window, no part of this acquisition may be described as OSTIA-free: NOAA states the Geo-Polar Blended SST product switched to OSTIA for bias correction in 2016, which overlaps this window.",
+    "redistribution_allowed": true,
+    "raw_tracked_in_git": false,
+    "is_synthetic": false,
+    "provides_variables": [
+      "coral_bleaching_hotspot_c (instantaneous thermal stress)",
+      "degree_heating_week (accumulated thermal stress over 12 weeks)"
+    ],
+    "cannot_provide": [
+      "coral_cover_percentage",
+      "bleaching_percentage",
+      "disease_percentage",
+      "reef_health",
+      "restoration_suitability",
+      "sonar_backscatter",
+      "acoustic_complexity_index",
+      "rugosity_index",
+      "depth_m",
+      "ph",
+      "turbidity_ntu",
+      "dissolved_oxygen_mg_l",
+      "salinity_ppt",
+      "in-situ subsurface water_temperature_c at reef depth"
+    ],
+    "disclaimer": "These are thermal-stress PREDICTORS, not biological observations. DHW is not a bleaching percentage; HotSpot is not a bleaching percentage; Bleaching Alert Area is not an observed bleaching class. NOAA's DHW thresholds (4 degC-weeks, 8 degC-weeks) describe risk, not an observed outcome. Deriving a reef_health or restoration_suitability label by thresholding any variable here would recreate the label-construction leakage documented in the 2026-08-19 audit using real-looking inputs. SST is a sea-SURFACE analysis and is not an in-situ subsurface measurement at reef depth.",
+    "notes": "analysis_scope = SEAVIEW_MALDIVES_REPEAT_TRANSECTS. Acquired to support ONE observational question: whether greater thermal exposure between two Seaview visits is ASSOCIATED with a larger change in the image-derived hard-coral-cover estimate across 26 repeated Maldivian transects. It is not causal bleaching attribution, not an Indian validation dataset, not training data for reef_health or restoration_suitability, and it does not touch the registered synthetic champions. This manifest is SEPARATE from noaa_crw_5km_v3_1.manifest.json, which remains the record of the 2018-2024 India-region acquisition and is unmodified. The delivered files carry no CRW 'mask' variable, so land and missing data both appear as NaN and are not separable within them."
+  },
+  "subsets": [
+    {
+      "dataset_id": "noaa_crw_5km_v3_1_maldives_seaview",
+      "region": "Maldives (Seaview repeat transects) / Coral Bleaching HotSpot",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/maldives_seaview/noaa_crw_5km_v3_1_hotspot_maldives_seaview.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 2796348,
+      "sha256": "8a3eef957ff67d3bcf4f49e107eb519035d22cfaf14d0a4f6a1a2c9d5bed6b0e",
+      "retrieved_at_utc": "2026-08-30T03:54:08Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_hs_v1_0.nc?hotspot[(2015-03-29T12:00:00Z):1:(2017-04-01T12:00:00Z)][(2.55):1:(4.65)][(72.6):1:(73.7)]",
+      "requested_bbox": [
+        2.55,
+        4.65,
+        72.6,
+        73.7
+      ],
+      "actual_bbox": [
+        2.5250000953674316,
+        4.625,
+        72.625,
+        73.67500305175781
+      ],
+      "dimensions": {
+        "time": 735,
+        "lat": 43,
+        "lon": 22
+      },
+      "grid_spacing_deg": 0.049999952316,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Derived from the 26 repeated Maldivian Seaview transects, not chosen. The minimal box containing every start and end coordinate of both visits was buffered by 0.1 deg (two native CRW cells) and snapped outward to the 0.05 deg grid. The buffer exists so the nearest-valid-ocean-cell search used for spatial matching cannot run off the edge of the subset; it is not a reef mask and not an environmental context window. It deliberately does NOT reuse the four Indian acquisition windows, which describe different reef systems roughly 400-1900 km away.",
+      "is_synthetic": false,
+      "variable_name": "hotspot",
+      "variable_long_name": "Coral Bleaching HotSpot",
+      "variable_units": "degree_C",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2015-03-29T12:00:00Z",
+        "2017-04-01T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2015-03-29T12:00:00Z",
+        "2017-04-01T12:00:00Z"
+      ],
+      "n_time_steps": 735,
+      "time_spacing_days": 1.0,
+      "missing_dates": 0,
+      "nan_percent": 0.0,
+      "min_value": -2.5199999809265137,
+      "max_value": 1.7999999523162842,
+      "mean_value": -0.28294810932199005,
+      "median_value": -0.2800000011920929,
+      "latitude_order": "descending"
+    },
+    {
+      "dataset_id": "noaa_crw_5km_v3_1_maldives_seaview",
+      "region": "Maldives (Seaview repeat transects) / Degree Heating Week",
+      "local_file": "data/external/raw/noaa_crw_5km_v3_1/maldives_seaview/noaa_crw_5km_v3_1_dhw_maldives_seaview.nc",
+      "file_format": "NetCDF-3 classic",
+      "file_size_bytes": 2796320,
+      "sha256": "9fd8e4bff7431c1c444e4044c43e8acfa44362b3c192fd3d339c0b7dbb201654",
+      "retrieved_at_utc": "2026-08-30T03:54:08Z",
+      "request_url": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_dhw_v1_0.nc?degree_heating_week[(2015-03-29T12:00:00Z):1:(2017-04-01T12:00:00Z)][(2.55):1:(4.65)][(72.6):1:(73.7)]",
+      "requested_bbox": [
+        2.55,
+        4.65,
+        72.6,
+        73.7
+      ],
+      "actual_bbox": [
+        2.5250000953674316,
+        4.625,
+        72.625,
+        73.67500305175781
+      ],
+      "dimensions": {
+        "time": 735,
+        "lat": 43,
+        "lon": 22
+      },
+      "grid_spacing_deg": 0.049999952316,
+      "elevation_units": null,
+      "min_elevation_m": null,
+      "max_elevation_m": null,
+      "median_elevation_m": null,
+      "marine_cell_count": null,
+      "land_cell_count": null,
+      "nodata_count": null,
+      "bbox_rationale": "Derived from the 26 repeated Maldivian Seaview transects, not chosen. The minimal box containing every start and end coordinate of both visits was buffered by 0.1 deg (two native CRW cells) and snapped outward to the 0.05 deg grid. The buffer exists so the nearest-valid-ocean-cell search used for spatial matching cannot run off the edge of the subset; it is not a reef mask and not an environmental context window. It deliberately does NOT reuse the four Indian acquisition windows, which describe different reef systems roughly 400-1900 km away.",
+      "is_synthetic": false,
+      "variable_name": "degree_heating_week",
+      "variable_long_name": "Degree Heating Week",
+      "variable_units": "degree_Celsius_weeks",
+      "variable_dtype": "float32",
+      "fill_value": "NaN",
+      "requested_time_range": [
+        "2015-03-29T12:00:00Z",
+        "2017-04-01T12:00:00Z"
+      ],
+      "actual_time_range": [
+        "2015-03-29T12:00:00Z",
+        "2017-04-01T12:00:00Z"
+      ],
+      "n_time_steps": 735,
+      "time_spacing_days": 1.0,
+      "missing_dates": 0,
+      "nan_percent": 0.0,
+      "min_value": 0.0,
+      "max_value": 8.430000305175781,
+      "mean_value": 0.8181756915759834,
+      "median_value": 0.0,
+      "latitude_order": "descending"
+    }
+  ],
+  "acquisition_window_derivation": {
+    "derived_from": "data/external/raw/seaview/tabular-data/seaviewsurvey_surveys.csv, ocean == 'IND' and country == 'MDV', transects with exactly two surveys",
+    "n_repeat_transects": 26,
+    "earliest_first_survey": "2015-03-29",
+    "latest_second_survey": "2017-04-01",
+    "requested_start_date": "2015-03-29",
+    "requested_end_date": "2017-04-01",
+    "pad_days": 0,
+    "window_rationale": "Derived from the survey dates themselves: earliest first survey through latest second survey across the 26 pairs. No padding is added after the last second survey, because the analysis may not use any CRW observation dated after a pair's own second survey. The window is fixed before any exposure metric is computed and is independent of the response, so it cannot be a post-hoc event window selected to fit the observed cover change.",
+    "transect_bbox_unbuffered": [
+      2.66034,
+      4.521389,
+      72.727987,
+      73.589028
+    ],
+    "buffer_deg": 0.1,
+    "requested_bbox": [
+      2.55,
+      4.65,
+      72.6,
+      73.7
+    ],
+    "bbox_rationale": "Derived from the 26 repeated Maldivian Seaview transects, not chosen. The minimal box containing every start and end coordinate of both visits was buffered by 0.1 deg (two native CRW cells) and snapped outward to the 0.05 deg grid. The buffer exists so the nearest-valid-ocean-cell search used for spatial matching cannot run off the edge of the subset; it is not a reef mask and not an environmental context window. It deliberately does NOT reuse the four Indian acquisition windows, which describe different reef systems roughly 400-1900 km away.",
+    "hard_coded_dates": false
+  },
+  "checksum_semantics": {
+    "algorithm": "SHA-256",
+    "scope": "Hash of the subset file as retrieved by this project, computed locally at acquisition time.",
+    "is_publisher_canonical_checksum": false,
+    "guarantees": "The local file has not been altered since acquisition.",
+    "does_not_guarantee": "That re-requesting the same logical subset reproduces identical bytes. ERDDAP writes a fresh NetCDF on every request and embeds generation metadata, so two requests for the same window will differ in bytes while encoding equivalent values.",
+    "authoritative_identity": "Scientific identity of the source product is pinned by version 'v3.1 (released 2018-08-01)' and DOI 10.25921/6jgr-pt28, not by these file hashes."
+  },
+  "variable_semantics": {
+    "warning": "Both variables below are thermal quantities. Neither is a biological observation. DHW != bleaching_percentage. HotSpot != bleaching_percentage. NOAA's DHW thresholds describe RISK, not observed outcome. Thresholding either into a reef-condition label is prohibited, and doing so here would be especially circular because these values are the PREDICTOR of the association analysis they were acquired for.",
+    "products": {
+      "hotspot": {
+        "label": "Coral Bleaching HotSpot",
+        "erddap_variable": "hotspot",
+        "means": "Instantaneous coral bleaching heat stress, in degrees Celsius: daily SST minus the site's Maximum Monthly Mean (MMM) climatology. NOAA's published HotSpot maps show only positive values, but the archived variable carries the full signed difference (valid range -15 to +15), so negative values - cooler than the MMM - are normal and are not missing data. Values of 1 degC or more indicate heat stress capable of leading to bleaching, and only those accumulate into DHW.",
+        "does_not_mean": "Not a bleaching observation and not a bleaching percentage. It quantifies present thermal stress; whether corals actually bleached is a biological outcome that requires in-water or photographic observation."
+      },
+      "dhw": {
+        "label": "Degree Heating Week",
+        "erddap_variable": "degree_heating_week",
+        "means": "Accumulated coral bleaching heat stress over the preceding 12 weeks, in degC-weeks: the running accumulation of HotSpot values at or above 1 degC. NOAA associates 4 degC-weeks with a risk of bleaching and 8 degC-weeks with a risk of reef-wide bleaching plus mortality of heat-sensitive corals.",
+        "does_not_mean": "Not a bleaching percentage and not a reef-condition label. NOAA's thresholds describe RISK, not measured outcome. Thresholding DHW into a reef_health class would manufacture a label out of a predictor - precisely the circular supervision the 2026-08-19 audit found in the synthetic dataset."
+      }
+    }
+  },
+  "omitted_products": {
+    "sst": "Not required. The pre-registered exposure metrics are maximum DHW and maximum HotSpot over each pair interval; absolute SST adds no term to either. Acquiring it would enlarge the download without entering the analysis. It remains available for the India window, and can be requested for this window later under its own record.",
+    "sst_anomaly": "Not required, and partly redundant: HotSpot is already SST minus the site's Maximum Monthly Mean, which is the anomaly formulation relevant to coral heat stress. Adding a second, differently-baselined anomaly would invite selecting whichever of the two correlates better with the response \u2014 exactly the multiple-comparison problem the analysis plan forbids.",
+    "bleaching_alert_area_7d_max": "Omitted for the same reasons as in the India acquisition (redundant with HotSpot/DHW, a 7-day maximum composite that does not align with daily variables, and a categorical scale NOAA revised on 2023-12-15). See the India manifest's omitted_products block."
+  },
+  "diagnostics": {
+    "per_file": {
+      "hotspot": {
+        "n_time_steps": 735,
+        "missing_dates": 0,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 1.0,
+        "nan_percent": 0.0,
+        "min": -2.5199999809265137,
+        "median": -0.2800000011920929,
+        "mean": -0.28294810932199005,
+        "max": 1.7999999523162842,
+        "std": 0.7440172427121918,
+        "range_check": {
+          "bounds": [
+            -15.0,
+            15.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      },
+      "dhw": {
+        "n_time_steps": 735,
+        "missing_dates": 0,
+        "time_spacing_days": 1.0,
+        "max_gap_days": 1.0,
+        "nan_percent": 0.0,
+        "min": 0.0,
+        "median": 0.0,
+        "mean": 0.8181756915759834,
+        "max": 8.430000305175781,
+        "std": 1.8568320224430255,
+        "range_check": {
+          "bounds": [
+            0.0,
+            100.0
+          ],
+          "ok": true,
+          "problems": []
+        }
+      }
+    },
+    "range_problems": [],
+    "expected_days": 735
+  }
+}
