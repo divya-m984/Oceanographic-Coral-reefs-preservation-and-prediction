@@ -293,11 +293,13 @@ def paired_change_summary(pairs: pd.DataFrame) -> dict:
     """
     delta = pairs["delta_hard_coral"]
 
-    # Normality is CHECKED and REPORTED rather than assumed, and the paired
-    # t-test is reported alongside the Wilcoxon test rather than instead of it.
-    # Shapiro-Wilk on 26 differences is not a strong test; it is enough to show
-    # the assumption is not comfortable here, which is why the signed-rank test
-    # is the one quoted.
+    # Normality is CHECKED and REPORTED rather than assumed, and BOTH paired
+    # tests are reported. A significant Shapiro-Wilk result is not on its own a
+    # licence to switch tests: Wilcoxon signed-rank carries its own assumptions
+    # (symmetry of the differences about their median) and is not automatically
+    # "the valid one" when normality fails. It is reported as the primary
+    # rank-based paired analysis, with the paired t-test kept as a complementary
+    # sensitivity analysis so the reader can see both.
     shapiro = stats.shapiro(delta.to_numpy())
     wilcoxon = stats.wilcoxon(
         pairs["second_pr_hard_coral"].to_numpy(),
@@ -374,14 +376,26 @@ def paired_change_summary(pairs: pd.DataFrame) -> dict:
             "statistic": float(shapiro.statistic),
             "p_value": float(shapiro.pvalue),
             "normal_at_0_05": bool(shapiro.pvalue >= 0.05),
-            "consequence": (
-                "The paired differences are not comfortably normal, so the Wilcoxon signed-rank "
-                "test is the quoted paired test. The paired t-test is reported alongside it for "
-                "transparency, not as the primary result."
+            "interpretation": (
+                "The paired-difference distribution was strongly non-normal (Shapiro-Wilk "
+                f"p = {shapiro.pvalue:.5f}). Wilcoxon signed-rank is therefore reported as the "
+                "primary rank-based paired analysis, while the paired t-test is retained as a "
+                "complementary sensitivity analysis. This is a reporting choice, not a claim "
+                "that a significant Shapiro-Wilk result makes the signed-rank test valid: "
+                "Wilcoxon has its own assumptions, including symmetry of the differences about "
+                "their median, which are not established by the normality test."
             ),
         },
         "paired_test": {
-            "primary": "Wilcoxon signed-rank (two-sided), second visit vs first visit",
+            "primary": (
+                "Wilcoxon signed-rank (two-sided), second visit vs first visit — the primary "
+                "rank-based paired analysis"
+            ),
+            "secondary": (
+                "Paired t-test (two-sided), second visit vs first visit — retained as a "
+                "complementary sensitivity analysis, not as a replacement for the rank-based "
+                "test and not as the primary result"
+            ),
             "wilcoxon_statistic": float(wilcoxon.statistic),
             "wilcoxon_p_value": float(wilcoxon.pvalue),
             "secondary_paired_t_statistic": float(ttest.statistic),
@@ -849,6 +863,12 @@ def associate(matched: pd.DataFrame) -> dict:
                 "resolve the association in either direction. That is 'not detected here', which "
                 "is not the same claim as 'not present'."
             ),
+            "spatial_dependence": (
+                "The 26 transects are spatially clustered and share the same regional 2016 "
+                "heat-stress event. Consequently, the correlation p-values and bootstrap "
+                "intervals above are interpreted descriptively and should not be treated as "
+                "inference from 26 independent climatic replicates."
+            ),
             "what_a_null_here_does_not_mean": (
                 "It does not mean thermal stress is unrelated to coral-cover change. It means "
                 "this design — 26 transects in one small area, all exposed to the same 2016 "
@@ -862,6 +882,10 @@ def associate(matched: pd.DataFrame) -> dict:
             "cross_validation": "not an ML benchmark",
             "causal_attribution": "the design does not support it",
             "outlier_removal": "none; influence is reported instead",
+            "spatial_dependence_adjustment": (
+                "none; the spatial clustering of the 26 transects is disclosed and the "
+                "correlation inference read descriptively, not corrected for"
+            ),
         },
         "scatter_data": [
             {
@@ -1190,6 +1214,14 @@ def main() -> int:
             "therefore has little power to detect an exposure-response gradient, and a weak "
             "correlation is as consistent with 'no contrast to measure' as with 'no "
             "relationship'. See association.exposure_contrast for the actual ranges."
+        ),
+        "spatial_dependence": (
+            "The 26 transects are spatially clustered and share the same regional 2016 "
+            "heat-stress event. Consequently, the correlation p-values and bootstrap intervals "
+            "are interpreted descriptively and should not be treated as inference from 26 "
+            "independent climatic replicates. No spatial model, clustered resampling or "
+            "permutation scheme was fitted to correct for this; the dependence is disclosed "
+            "rather than adjusted for."
         ),
         "no_labels_created": (
             "No reef_health class, no restoration_suitability class, no bleached/not-bleached "

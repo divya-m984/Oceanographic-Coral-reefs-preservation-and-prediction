@@ -3,7 +3,7 @@
   "provenance": {
     "analysis_scope": "SEAVIEW_MALDIVES_REPEAT_TRANSECTS",
     "geography": "MALDIVES_NOT_INDIA",
-    "generated_at_utc": "2026-08-30T04:21:10Z",
+    "generated_at_utc": "2026-09-14T07:42:55Z",
     "generated_by": "scripts/analyze_seaview_maldives_pairs.py",
     "biological_source": {
       "dataset_id": "seaview_survey",
@@ -248,6 +248,7 @@
         }
       },
       "reading": "Read the effect sizes and intervals, not the p-values. A confidence interval spanning zero on n = 26 across a narrow exposure range means the data do not resolve the association in either direction. That is 'not detected here', which is not the same claim as 'not present'.",
+      "spatial_dependence": "The 26 transects are spatially clustered and share the same regional 2016 heat-stress event. Consequently, the correlation p-values and bootstrap intervals above are interpreted descriptively and should not be treated as inference from 26 independent climatic replicates.",
       "what_a_null_here_does_not_mean": "It does not mean thermal stress is unrelated to coral-cover change. It means this design \u2014 26 transects in one small area, all exposed to the same 2016 event, with an image-derived response \u2014 does not resolve a difference between them. See exposure_contrast above."
     },
     "not_performed": {
@@ -255,7 +256,8 @@
       "train_test_split": "not an ML benchmark",
       "cross_validation": "not an ML benchmark",
       "causal_attribution": "the design does not support it",
-      "outlier_removal": "none; influence is reported instead"
+      "outlier_removal": "none; influence is reported instead",
+      "spatial_dependence_adjustment": "none; the spatial clustering of the 26 transects is disclosed and the correlation inference read descriptively, not corrected for"
     },
     "scatter_data": [
       {
@@ -422,6 +424,7 @@
     "response_is_estimated": "pr_hard_coral is a classifier output, not measured cover and not ground truth. The published 97 % classifier validation is real and a well-validated estimate is still an estimate.",
     "sample_size": "n = 26 transects. Photo-quadrats within a transect are pseudo-replicates and are not used as independent observations. Confidence intervals at this size are wide and the effect sizes, not the p-values, carry the result.",
     "restricted_exposure_range": "All 26 transects sit inside one Maldivian box roughly 0.9 deg across and share the same 2016 thermal event, so between-transect exposure barely varies. The design therefore has little power to detect an exposure-response gradient, and a weak correlation is as consistent with 'no contrast to measure' as with 'no relationship'. See association.exposure_contrast for the actual ranges.",
+    "spatial_dependence": "The 26 transects are spatially clustered and share the same regional 2016 heat-stress event. Consequently, the correlation p-values and bootstrap intervals are interpreted descriptively and should not be treated as inference from 26 independent climatic replicates. No spatial model, clustered resampling or permutation scheme was fitted to correct for this; the dependence is disclosed rather than adjusted for.",
     "no_labels_created": "No reef_health class, no restoration_suitability class, no bleached/not-bleached class, no healthy/unhealthy class. CRW values were not thresholded into any reef-condition label.",
     "registered_models_untouched": "The registered synthetic champions, artifacts/mlruns.db and data/raw/observations.csv are not read, modified or retrained by this analysis."
   }

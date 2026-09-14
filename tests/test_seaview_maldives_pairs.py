@@ -89,6 +89,26 @@ BANNED_GEOGRAPHIC_CLAIMS = (
     "validation for indian reefs",
 )
 
+#: Phrasings that encode the simplistic rule "Shapiro-Wilk was significant,
+#: therefore the Wilcoxon test is the valid one". A significant normality test
+#: does not confer validity on the signed-rank test, which carries its own
+#: assumptions; these regexes fail the wording that pretends otherwise. They are
+#: patterns rather than exact strings so a reworded version of the same fallacy
+#: is caught too.
+SIMPLISTIC_NORMALITY_RULES = (
+    r"not (?:comfortably |especially |very )?normal[,;]? so (?:the )?wilcoxon",
+    r"not (?:comfortably |especially |very )?normal[,;]? (?:and|therefore) (?:the )?wilcoxon",
+    r"shapiro[- ]wilk [^.]{0,40}(?:failed|fails)",
+    r"(?:therefore|hence|so) (?:the )?wilcoxon [^.]{0,40}(?:is|becomes) (?:the )?valid",
+    r"fail(?:ed|s)? normality[,;]? (?:so|therefore|hence)",
+)
+
+#: Wording that would present the 26 transects as independent climatic draws.
+REPLICATE_INDEPENDENCE_CLAIMS = (
+    r"26 independent (?:climatic )?replicates",
+    r"independent climatic replicates",
+)
+
 _DENIAL_MARKERS = (
     "not ",
     "never",
@@ -989,3 +1009,140 @@ class TestWindowIsInternallyConsistent:
             first = date.fromisoformat(row["first_survey_date"][:10])
             second = date.fromisoformat(row["second_survey_date"][:10])
             assert (second - first).days == int(row["interval_days"]), row["transect_id"]
+
+
+# ---------------------------------------------------------------------------
+# Statistical interpretation
+# ---------------------------------------------------------------------------
+
+
+def _interpretation_surfaces(summary: dict, association: dict) -> dict[str, str]:
+    """
+    The places a reader could pick up the paired-test interpretation.
+
+    Machine-readable and human-readable are both included: a correction applied
+    to one and not the other leaves a reader quoting the stale version, which is
+    exactly the failure this milestone is fixing.
+    """
+    return {
+        "pairs_summary.json": _normalised(json.dumps(summary)),
+        "crw_association.json": _normalised(json.dumps(association)),
+        "docs/external_data.md §8a": _normalised(_maldives_section()),
+    }
+
+
+class TestPairedTestInterpretation:
+    """
+    Both paired tests are reported, and neither is justified by the other's
+    absence.
+
+    The failure mode being guarded against is a real one in applied statistics:
+    running Shapiro-Wilk, seeing p < 0.05, and concluding that the rank-based
+    test is therefore the correct one. It is not an entailment — Wilcoxon
+    signed-rank assumes the differences are symmetric about their median, which
+    a normality test says nothing about. The honest framing is a reporting
+    choice with both tests shown, and that is what these tests pin.
+    """
+
+    def test_no_surface_encodes_non_normal_therefore_wilcoxon(self, summary, association):
+        for where, text in _interpretation_surfaces(summary, association).items():
+            for pattern in SIMPLISTIC_NORMALITY_RULES:
+                match = re.search(pattern, text)
+                assert match is None, f"{where}: simplistic normality rule: {match.group(0)!r}"
+
+    def test_wilcoxon_is_described_as_the_primary_rank_based_analysis(self, summary):
+        text = _normalised(json.dumps(summary["paired_change"]))
+        assert "primary rank-based paired analysis" in text
+        assert "wilcoxon" in text
+
+    def test_the_paired_t_test_is_described_as_complementary(self, summary):
+        text = _normalised(json.dumps(summary["paired_change"]))
+        assert "complementary sensitivity analysis" in text
+        assert "sensitivity analysis" in _normalised(_maldives_section())
+
+    def test_both_paired_tests_are_still_reported(self, summary):
+        test = summary["paired_change"]["paired_test"]
+        for key in (
+            "wilcoxon_statistic",
+            "wilcoxon_p_value",
+            "secondary_paired_t_statistic",
+            "secondary_paired_t_p_value",
+        ):
+            assert isinstance(test[key], float), key
+
+    def test_the_normality_result_carries_its_own_caveat(self, summary):
+        """
+        Stating the non-normality is not enough; the limits of what follows from
+        it must travel with it, or the reader supplies the missing inference.
+        """
+        check = summary["paired_change"]["normality_check"]
+        text = _normalised(check["interpretation"])
+        assert "shapiro" in text
+        assert "own assumption" in text or "symmetry" in text
+
+    def test_the_documented_section_reports_both_tests(self):
+        section = _normalised(_maldives_section())
+        assert "wilcoxon" in section
+        assert "paired t-test" in section
+
+
+class TestSpatialDependenceIsDisclosed:
+    """
+    26 rows are not 26 independent climatic observations.
+
+    The transects sit in one small box under one 2016 heat-stress event, so the
+    exposure values attached to them are not independent draws. Nothing here is
+    corrected for — no spatial model, no clustered bootstrap — so the disclosure
+    is the whole of the remedy, and it has to be present and unambiguous.
+    """
+
+    def test_the_association_report_discloses_spatial_clustering(self, association):
+        text = _normalised(json.dumps(association))
+        assert "spatially clustered" in text
+        assert "independent climatic replicates" in text
+        assert "descriptive" in text
+
+    def test_the_limitations_block_names_spatial_dependence(self, association, summary):
+        for blob in (association, summary):
+            note = _normalised(blob["limitations"]["spatial_dependence"])
+            assert "spatially clustered" in note
+            assert "2016" in note
+            assert "independent climatic replicates" in note
+
+    def test_the_documented_section_discloses_spatial_clustering(self):
+        section = _normalised(_maldives_section())
+        assert "spatially clustered" in section
+        assert "independent climatic replicates" in section
+
+    def test_independence_is_denied_and_never_asserted(self, summary, association):
+        """
+        The phrase has to appear inside a denial. Asserting the transects *are*
+        independent replicates, anywhere, is the error being guarded against.
+        """
+        for where, text in _interpretation_surfaces(summary, association).items():
+            for pattern in REPLICATE_INDEPENDENCE_CLAIMS:
+                for occurrence in re.finditer(pattern, text):
+                    window = text[max(0, occurrence.start() - 220) : occurrence.end() + 60]
+                    assert _denies(window), f"{where}: independence asserted: {window}"
+
+    def test_correlation_inference_stays_descriptive(self, association):
+        interpretation = _normalised(json.dumps(association["association"]["interpretation"]))
+        assert "descriptive" in interpretation
+        assert "not detected here" in interpretation
+
+    def test_no_new_inferential_machinery_was_introduced(self):
+        """
+        The correction is a disclosure, not a new model. If a spatial
+        regression or a clustered resampling scheme ever does get added, this
+        test should be updated deliberately rather than drift past unnoticed.
+        """
+        referenced = _referenced_identifiers(ANALYSIS_SCRIPT)
+        for banned in ("mixedlm", "MixedLM", "permutation_test", "variogram", "GLS", "gls"):
+            assert banned not in referenced, banned
+
+    def test_the_report_records_that_no_adjustment_was_made(self, association):
+        note = _normalised(
+            association["association"]["not_performed"]["spatial_dependence_adjustment"]
+        )
+        assert "none" in note
+        assert "disclosed" in note or "not corrected" in note

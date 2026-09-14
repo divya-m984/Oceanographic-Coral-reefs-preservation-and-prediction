@@ -1361,10 +1361,15 @@ observational association analysis, not an ML benchmark.
 | Effect size (rank-biserial) | −0.749 |
 | Median change, bootstrap 95 % CI | −0.061 to −0.011 |
 
-Shapiro-Wilk on the differences gives p = 0.00051, so the differences are not
-comfortably normal and the Wilcoxon test is the quoted one; the paired t-test
-(t = −3.16, p = 0.0041) is reported alongside it for transparency, not instead.
-No transect was removed as an outlier.
+The paired-difference distribution was strongly non-normal (Shapiro-Wilk
+p = 0.00051). Wilcoxon signed-rank is therefore reported as the **primary
+rank-based paired analysis**, while the paired t-test (t = −3.16, p = 0.0041) is
+retained as a **complementary sensitivity analysis**. That is a reporting
+choice, not the claim that a significant Shapiro-Wilk result makes the
+signed-rank test the valid one: Wilcoxon carries its own assumptions — symmetry
+of the differences about their median — which a normality test does not
+establish. Both tests are reported, and both point the same way. No transect was
+removed as an outlier.
 
 **Then the association with thermal exposure:**
 
@@ -1397,6 +1402,18 @@ reported rather than tidied away.
 2016 thermal event. `max_hotspot` spans just 0.18 °C — 18 storage quanta, with
 11 tied ranks among 26 transects — so a rank test has very little to rank.
 `max_dhw` spans 1.95 °C-weeks with no ties, which is better but still narrow.
+
+**The 26 transects are not 26 independent climatic replicates.** They are
+spatially clustered inside that same small box and share the same regional 2016
+heat-stress event, so the exposure values attached to them are not independent
+draws. Consequently the correlation p-values and bootstrap intervals above are
+**interpreted descriptively** and must not be read as inference from 26
+independent replicates — the effective number of independent climatic
+observations is closer to one event than to 26. No spatial regression, clustered
+bootstrap, permutation test or mixed model was fitted to correct for this: the
+dependence is disclosed rather than adjusted for, and the quoted intervals
+should be treated as descriptive summaries of these 26 rows rather than as
+calibrated frequentist coverage.
 
 So the honest reading is: **this design does not resolve an exposure-response
 gradient in either direction.** That is *not detected here*, which is a

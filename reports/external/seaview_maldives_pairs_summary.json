@@ -3,7 +3,7 @@
   "provenance": {
     "analysis_scope": "SEAVIEW_MALDIVES_REPEAT_TRANSECTS",
     "geography": "MALDIVES_NOT_INDIA",
-    "generated_at_utc": "2026-08-30T04:21:10Z",
+    "generated_at_utc": "2026-09-14T07:42:55Z",
     "generated_by": "scripts/analyze_seaview_maldives_pairs.py",
     "biological_source": {
       "dataset_id": "seaview_survey",
@@ -152,10 +152,11 @@
       "statistic": 0.8262864002335724,
       "p_value": 0.0005103004762902183,
       "normal_at_0_05": false,
-      "consequence": "The paired differences are not comfortably normal, so the Wilcoxon signed-rank test is the quoted paired test. The paired t-test is reported alongside it for transparency, not as the primary result."
+      "interpretation": "The paired-difference distribution was strongly non-normal (Shapiro-Wilk p = 0.00051). Wilcoxon signed-rank is therefore reported as the primary rank-based paired analysis, while the paired t-test is retained as a complementary sensitivity analysis. This is a reporting choice, not a claim that a significant Shapiro-Wilk result makes the signed-rank test valid: Wilcoxon has its own assumptions, including symmetry of the differences about their median, which are not established by the normality test."
     },
     "paired_test": {
-      "primary": "Wilcoxon signed-rank (two-sided), second visit vs first visit",
+      "primary": "Wilcoxon signed-rank (two-sided), second visit vs first visit \u2014 the primary rank-based paired analysis",
+      "secondary": "Paired t-test (two-sided), second visit vs first visit \u2014 retained as a complementary sensitivity analysis, not as a replacement for the rank-based test and not as the primary result",
       "wilcoxon_statistic": 44.0,
       "wilcoxon_p_value": 0.00041159987449645996,
       "secondary_paired_t_statistic": -3.163516166912376,
@@ -181,6 +182,7 @@
     "response_is_estimated": "pr_hard_coral is a classifier output, not measured cover and not ground truth. The published 97 % classifier validation is real and a well-validated estimate is still an estimate.",
     "sample_size": "n = 26 transects. Photo-quadrats within a transect are pseudo-replicates and are not used as independent observations. Confidence intervals at this size are wide and the effect sizes, not the p-values, carry the result.",
     "restricted_exposure_range": "All 26 transects sit inside one Maldivian box roughly 0.9 deg across and share the same 2016 thermal event, so between-transect exposure barely varies. The design therefore has little power to detect an exposure-response gradient, and a weak correlation is as consistent with 'no contrast to measure' as with 'no relationship'. See association.exposure_contrast for the actual ranges.",
+    "spatial_dependence": "The 26 transects are spatially clustered and share the same regional 2016 heat-stress event. Consequently, the correlation p-values and bootstrap intervals are interpreted descriptively and should not be treated as inference from 26 independent climatic replicates. No spatial model, clustered resampling or permutation scheme was fitted to correct for this; the dependence is disclosed rather than adjusted for.",
     "no_labels_created": "No reef_health class, no restoration_suitability class, no bleached/not-bleached class, no healthy/unhealthy class. CRW values were not thresholded into any reef-condition label.",
     "registered_models_untouched": "The registered synthetic champions, artifacts/mlruns.db and data/raw/observations.csv are not read, modified or retrained by this analysis."
   }
